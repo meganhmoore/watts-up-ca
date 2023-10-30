@@ -1,0 +1,165 @@
+---
+title: "Watts Up CA"
+author: "Kathryn Link-Oberstar"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r}
+suppressMessages({
+  library(readxl)
+  library(dplyr)
+  library(forecast)
+  library(tidyverse)
+  library(tsibble)
+  library(fpp)
+  library(tseries)
+  library(tidyr)
+})
+
+setwd("~/Desktop/Graduate School/Fall 2023/Time Series Analysis and Forecasting /Data/Monthly Consumption")
+
+```
+
+
+## LOAD DATA
+
+```{r}
+# Load the Energy Consumption Data
+files <- list.files(pattern = "\\.(xls|xlsx)$")
+print(files)
+combined_data <- data.frame()
+
+# Convert Files to df, collapse the 3 header columns into 1 header
+for (file in files) {
+  data <- read_excel(file, col_names = FALSE)
+  new_headers <- apply(data[1:3, ], 2, function(x) paste(na.omit(x), collapse = " "))
+  names(data) <- new_headers
+  data <- data[-(1:3), ]
+  data <- data.frame(lapply(data, function(x) {
+    if(is.factor(x)) as.character(x) else x
+  }), stringsAsFactors = FALSE)
+  combined_data <- bind_rows(combined_data, data)
+}
+
+# Make Month and Year Numeric
+combined_data$Month <- as.numeric(combined_data$Month)
+combined_data$Year <- as.numeric(combined_data$Year)
+
+# Filter data to exclude NA and only include CA
+combined_data <- combined_data %>% filter(!is.na(Year) & !is.na(Month) & combined_data$State == 'CA')
+
+# Sort by year and month
+sorted_data <- combined_data %>%
+  arrange(Year, Month)
+```
+
+
+## RESIDENTIAL ENERGY CONSUMPTION
+
+
+**EVALUATE DATASET**
+
+```{r}
+residential <- ts(as.numeric(sorted_data$RESIDENTIAL.Sales.Megawatthours), start = c(1990, 1), frequency = 12)
+plot(residential)
+```
+
+*Evaluate Distribution*
+
+```{r}
+shapiro.test(residential)
+```
+- p-value below significance threshold
+- data not normally distributed and will benefit from Box-Cox Transformation
+
+```{r}
+lambda <- BoxCox.lambda(residential)
+residential_transformed <- BoxCox(residential, lambda)
+plot(residential_transformed)
+```
+
+
+*Evaluate Stationality*
+
+```{r}
+kpss_result <- kpss.test(residential_transformed)
+print(kpss_result)
+```
+
+- p-value below 5%
+- Reject the null hypothesis that series is stationary
+- Non stationary series
+
+
+*Make Stationary with differencing*
+
+```{r}
+residential_first_diff <- diff(residential_transformed, differences = 1)
+plot(residential_first_diff, main="1st Order Differenced Data")
+kpss_result <- kpss.test(residential_first_diff)
+print(kpss_result)
+```
+- After 1st order differencing, p-value is 0.1
+- After 1 round of  differencing, data is stationary in the mean 
+
+
+*Seasonal Differencing*
+
+```{r}
+residential_seasonal_diff <- diff(residential_first_diff, lag = 12, differences = 1)
+plot(residential_seasonal_diff)
+```
+
+
+*ACF & PACF*
+
+```{r}
+Acf(residential_seasonal_diff)
+Pacf(residential_seasonal_diff)
+```
+- Seasonality
+
+
+**MODELING**
+
+```{r}
+plot(residential_seasonal_diff)
+```
+
+*Auto Arima*
+
+```{r}
+residential_auto_arima <- auto.arima(residential, 
+                                     seasonal = TRUE, 
+                                     trace = FALSE, 
+                                     stepwise = FALSE, 
+                                     approximation = FALSE, 
+                                     allowdrift = TRUE, 
+                                     lambda = 'auto')
+summary(residential_auto_arima)
+```
+
+```{r}
+checkresiduals(residential_auto_arima)
+```
+- Residuals are not white noise
+
+
+**COMMERCIAL ENERGY CONSUMPTION**
+```{r}
+commercial <- ts(sorted_data$COMMERCIAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
+plot(commercial)
+```
+
+**TRANSPORTATION ENERGY CONSUMPTION**
+```{r}
+transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
+plot(transportation)
+```
+
+**TOTAL ENERGY CONSUMPTION**
+```{r}
+total <- ts(sorted_data$TOTAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
+plot(total)
+```
