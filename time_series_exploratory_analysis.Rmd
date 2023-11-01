@@ -153,6 +153,7 @@ checkresiduals(residential_auto_arima)
 
 **COMMERCIAL ENERGY CONSUMPTION**
 
+
 ```{r}
 commercial <- ts(sorted_data$COMMERCIAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
 plot(commercial)
@@ -171,3 +172,7 @@ plot(transportation)
 total <- ts(sorted_data$TOTAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
 plot(total)
 ```
+
+General takeaways:
+
+-  trends/seasonality does not look the same across consumption type (residential, commercial, transportation, etc).
