@@ -1,0 +1,288 @@
+---
+title: "Watts Up CA"
+author: "Kathryn Link-Oberstar"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+suppressMessages({
+  library(readxl)
+  library(dplyr)
+  library(forecast)
+  library(tidyverse)
+  library(tsibble)
+  library(fpp)
+  library(tseries)
+  library(tidyr)
+})
+
+#change this depending on where you want to start your wd()
+#setwd("~/Desktop/Graduate School/Fall 2023/Time Series Analysis and Forecasting /Data/Monthly Consumption")
+```
+
+## LOAD DATA
+
+```{r}
+# Load the Energy Consumption Data
+files <- list.files(pattern = "\\.(xls|xlsx)$")
+print(files)
+combined_data <- data.frame()
+
+# Convert Files to df, collapse the 3 header columns into 1 header
+for (file in files) {
+  data <- read_excel(file, col_names = FALSE)
+  new_headers <- apply(data[1:3, ], 2, function(x) paste(na.omit(x), collapse = " "))
+  names(data) <- new_headers
+  data <- data[-(1:3), ]
+  data <- data.frame(lapply(data, function(x) {
+    if(is.factor(x)) as.character(x) else x
+  }), stringsAsFactors = FALSE)
+  combined_data <- bind_rows(combined_data, data)
+}
+
+# Make Month and Year Numeric
+combined_data$Month <- as.numeric(combined_data$Month)
+combined_data$Year <- as.numeric(combined_data$Year)
+
+# Filter data to exclude NA and only include state specified
+
+state <- "CA"
+
+combined_data <- combined_data %>% filter(!is.na(Year) & !is.na(Month) & combined_data$State == state)
+
+sorted_data <- combined_data %>%
+  arrange(Year, Month)
+```
+
+## RESIDENTIAL ENERGY CONSUMPTION
+
+**EVALUATE DATASET**
+
+Observations from the residential ts() object before any transformations:
+
+-   *trend*: positive, the residential consumption of electricity is increasing with time.
+
+-   *seasonality*: strong seasonality at the annual level. It looks like there are two peaks of electricity use each year (which makes sense if we think about A/C and heat uses as both tied to electricity).
+
+-   *type of seasonality*: the variance of the seasonality fluctuations change (increase) as a function of time, so this looks to be a multiplicative seasonality component.
+
+-   *stationarity*: given the above observations that we can observe both trends and seasonal effects, we can guess that the time series data is not yet stationary. We can test this below.
+
+
+## Looking at descriptive statistics of for different columns:
+
+**(Sales, and unit cost across residential, commercial, industrial and transportation)**
+
+```{r}
+# First, removing redundant columns
+
+combined_data_base <- combined_data %>% select(-State, -Data.Status)
+combined_data_base[] <- lapply(combined_data_base, as.numeric)
+
+# Second, creating a table with yearly (mean) values
+
+combined_data_yearly <- combined_data_base %>% select(-Month)
+
+combined_data_yearly <- combined_data_yearly %>%
+  group_by(Year) %>%
+  summarise(
+    across(everything(), mean, na.rm = TRUE)
+  )
+
+# Function to create overall (yearly) consumption and price plots across sectors   
+
+plot_energy_type <- function(data, energy_type, plot_type) {
+  price_col <- paste(energy_type, "Price.Cents.kWh", sep = ".")
+  sales_col <- paste(energy_type, "Sales.Megawatthours", sep = ".")
+
+  # Filter data for the specified energy type
+  data_filtered <- data %>%
+    select(Year, all_of(price_col), all_of(sales_col))
+
+  # Define variable names based on the plot type
+  var_name <- if (plot_type == "Sales") paste(energy_type, "Sales.Megawatthours", sep = ".") 
+  else paste(energy_type, "Price.Cents.kWh", sep = ".")
+  q25_var <- paste("q25", var_name, sep = "_")
+  median_var <- paste("median", var_name, sep = "_")
+  q75_var <- paste("q75", var_name, sep = "_")
+
+  # Calculate quartile statistics for the specified variable
+  data_filtered <- data_filtered %>%
+    summarise(!!q25_var := quantile(.data[[var_name]], 0.25, na.rm = TRUE),
+              !!median_var := median(.data[[var_name]], na.rm = TRUE),
+              !!q75_var := quantile(.data[[var_name]], 0.75, na.rm = TRUE))
+  
+  # Create a plot
+  plot <- ggplot(data = data, aes(x = Year)) +
+    geom_line(aes(y = data[[var_name]]), color = "blue") +
+    geom_hline(aes(yintercept = data_filtered[[q25_var]], color = "purple"), linetype = "dashed") +
+    geom_hline(aes(yintercept = data_filtered[[median_var]], color = "green"), linetype = "dashed") +
+    geom_hline(aes(yintercept = data_filtered[[q75_var]], color = "red"), linetype = "dashed") +
+    labs(y = if (plot_type == "Sales") "MWhr Consumption" else "Cents per KWhr", x = "Year") +
+    theme_minimal()
+
+  # Display the plot
+  print(plot)
+}
+```
+
+### Now generating plots 
+
+### Potentially interesting article:
+
+Hourly data: http://www.caiso.com/Pages/DocumentsByGroup.aspx?GroupID=A6FD5B3B-3638-4F4B-9EDF-B24AEF1DCC44
+
+CA reduced usage: https://www.eia.gov/todayinenergy/detail.php?id=54039
+
+Energy analysis during Covid: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8545301/
+
+```{r}
+plot_energy_type(combined_data_yearly, "RESIDENTIAL", "Sales")
+plot_energy_type(combined_data_yearly, "RESIDENTIAL", "Price")
+plot_energy_type(combined_data_yearly, "INDUSTRIAL", "Sales")
+plot_energy_type(combined_data_yearly, "INDUSTRIAL", "Price")
+plot_energy_type(combined_data_yearly, "COMMERCIAL", "Sales")
+plot_energy_type(combined_data_yearly, "COMMERCIAL", "Price")
+plot_energy_type(combined_data_yearly, "TRANSPORTATION", "Sales")
+plot_energy_type(combined_data_yearly, "TRANSPORTATION", "Price")
+```
+
+
+```{r}
+residential_sales <- ts(as.numeric(sorted_data$RESIDENTIAL.Sales.Megawatthours), start = c(1990, 1), frequency = 12)
+residential_unit_price <- ts(as.numeric(sorted_data$RESIDENTIAL.Price.Cents.kWh), start = c(1990, 1), frequency = 12)
+
+plot(residential_sales)
+plot(residential_unit_price)
+```
+### Decomposing time series
+
+```{r}
+# Plotting sales 
+plot(decompose(residential_sales, type = "multiplicative"))
+plot(stl(residential_sales, s.window = "periodic", robust = TRUE))
+
+# Plotting costs
+#plot(decompose(residential_unit_price, type = "multiplicative"))
+```
+
+
+
+
+
+*Evaluate Distribution*
+
+```{r}
+shapiro.test(residential_sales)
+```
+
+-   p-value below significance threshold
+-   data not normally distributed and will benefit from Box-Cox Transformation
+
+```{r}
+lambda <- BoxCox.lambda(residential_sales)
+residential_transformed <- BoxCox(residential_sales, lambda)
+plot(residential_transformed)
+print(lambda)
+```
+
+-   The Box-Cox $\lambda = -0.9999$ which is extremely close to -1 indicating that an inverse transformation plus 1 should be applied to smooth the variance.
+
+*Evaluate Stationarity*
+
+```{r}
+kpss_result <- kpss.test(residential_transformed)
+print(kpss_result)
+```
+
+-   p-value below 5%
+-   Reject the null hypothesis that series is stationary
+-   Non stationary series
+
+*Make Stationary with differencing*
+
+```{r}
+residential_first_diff <- diff(residential_transformed, differences = 1)
+plot(residential_first_diff, main="1st Order Differenced Data")
+kpss_result <- kpss.test(residential_first_diff)
+print(kpss_result)
+```
+
+-   After 1st order differencing, p-value is 0.1
+-   After 1 round of differencing, data is stationary in the mean
+
+*Seasonal Differencing*
+
+```{r}
+residential_seasonal_diff <- diff(residential_first_diff, lag = 12, differences = 1)
+plot(residential_seasonal_diff)
+kpss.test(residential_seasonal_diff)
+```
+
+*ACF & PACF*
+
+```{r}
+Acf(residential_seasonal_diff)
+Pacf(residential_seasonal_diff)
+```
+
+-   Seasonality
+
+**MODELING**
+
+```{r}
+plot(residential_seasonal_diff)
+```
+
+*Auto Arima*
+
+```{r}
+residential_auto_arima <- auto.arima(residential_sales, 
+                                     seasonal = TRUE, 
+                                     trace = FALSE, 
+                                     stepwise = FALSE, 
+                                     #approximation = FALSE, 
+                                     allowdrift = TRUE, 
+                                     lambda = 'auto')
+summary(residential_auto_arima)
+```
+
+```{r}
+checkresiduals(residential_auto_arima)
+```
+
+-   Residuals are not white noise
+
+**COMMERCIAL ENERGY CONSUMPTION**
+
+```{r}
+commercial <- ts(sorted_data$COMMERCIAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
+plot(commercial)
+```
+
+**TRANSPORTATION ENERGY CONSUMPTION**
+
+```{r}
+transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours[!is.na(as.numeric(sorted_data$TRANSPORTATION.Sales.Megawatthours))], start = c(1990, 1), frequency = 12)
+plot(transportation) # not sure if this is totally valid removing the NA's
+
+transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
+plot(transportation)
+```
+
+**TOTAL ENERGY CONSUMPTION**
+
+```{r}
+total <- ts(sorted_data$TOTAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
+plot(total)
+```
+
+General takeaways:
+
+-   trends/seasonality does not look the same across consumption type (residential, commercial, transportation, etc).
+-   transportation has a bunch of missingness (especially in the earlier years)
+    -   it also took a much more noticeable COVID hit than the other sectors (and surprisingly consumption didn't go up that much in 2020 for residential which is kind of surprising given that people were theoretically at home more)
+-   commercial sees a much steeper upward trend in the early 2000's
