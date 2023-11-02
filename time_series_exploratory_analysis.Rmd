@@ -85,7 +85,10 @@ shapiro.test(residential)
 lambda <- BoxCox.lambda(residential)
 residential_transformed <- BoxCox(residential, lambda)
 plot(residential_transformed)
+print(lambda)
 ```
+
+-   The Box-Cox $\lambda = -0.9999$ which is extremely close to -1 indicating that an inverse transformation plus 1 should be applied to smooth the variance.
 
 *Evaluate Stationarity*
 
@@ -153,7 +156,6 @@ checkresiduals(residential_auto_arima)
 
 **COMMERCIAL ENERGY CONSUMPTION**
 
-
 ```{r}
 commercial <- ts(sorted_data$COMMERCIAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
 plot(commercial)
@@ -162,6 +164,9 @@ plot(commercial)
 **TRANSPORTATION ENERGY CONSUMPTION**
 
 ```{r}
+transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours[!is.na(as.numeric(sorted_data$TRANSPORTATION.Sales.Megawatthours))], start = c(1990, 1), frequency = 12)
+plot(transportation) # not sure if this is totally valid removing the NA's
+
 transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
 plot(transportation)
 ```
@@ -175,4 +180,7 @@ plot(total)
 
 General takeaways:
 
--  trends/seasonality does not look the same across consumption type (residential, commercial, transportation, etc).
+-   trends/seasonality does not look the same across consumption type (residential, commercial, transportation, etc).
+-   transportation has a bunch of missingness (especially in the earlier years)
+    -   it also took a much more noticeable COVID hit than the other sectors (and surprisingly consumption didn't go up that much in 2020 for residential which is kind of surprising given that people were theoretically at home more)
+-   commercial sees a much steeper upward trend in the early 2000's
