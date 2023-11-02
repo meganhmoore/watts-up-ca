@@ -70,6 +70,11 @@ Observations from the residential ts() object before any transformations:
 ```{r}
 residential <- ts(as.numeric(sorted_data$RESIDENTIAL.Sales.Megawatthours), start = c(1990, 1), frequency = 12)
 plot(residential)
+train_res <- window(residential, start=1990, end=c(2022, 6))
+test_res <- window(residential, start=c(2022, 7), end=c(2023, 7))
+train_test_res <- window(residential, start=1990, end=c(2023, 7))
+plot(train_res)
+plot(test_res)
 ```
 
 *Evaluate Distribution*
