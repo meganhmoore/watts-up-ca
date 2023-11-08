@@ -17,7 +17,7 @@ suppressMessages({
   library(tidyr)
 })
 
-#change this depending on where you want to start your wd()
+# change this depending on where you want to start your wd()
 # setwd("~/Desktop/Graduate School/Fall 2023/Time Series Analysis and Forecasting /Data/Monthly Consumption")
 # setwd("~/Documents/time_series/final_project/watts-up-ca/")
 ```
@@ -58,7 +58,12 @@ sorted_data <- combined_data %>%
 
 ## RESIDENTIAL ENERGY CONSUMPTION
 
-**EVALUATE DATASET**
+```{r}
+residential <- ts(as.numeric(sorted_data$RESIDENTIAL.Sales.Megawatthours), start = c(1990, 1), frequency = 12)
+plot(residential)
+```
+
+### Evaluate Dataset 
 
 Observations from the residential ts() object before any transformations:
 
@@ -70,15 +75,179 @@ Observations from the residential ts() object before any transformations:
 
 -   *stationarity*: given the above observations that we can observe both trends and seasonal effects, we can guess that the time series data is not yet stationary. We can test this below.
 
+
+### Compare to other types of electricity consumption
+
+**COMMERCIAL ENERGY CONSUMPTION**
+
 ```{r}
-residential <- ts(as.numeric(sorted_data$RESIDENTIAL.Sales.Megawatthours), start = c(1990, 1), frequency = 12)
-plot(residential)
-train_res <- window(residential, start=1990, end=c(2022, 6))
-test_res <- window(residential, start=c(2022, 7), end=c(2023, 7))
-train_test_res <- window(residential, start=1990, end=c(2023, 7))
-plot(train_res)
-plot(test_res)
+commercial <- ts(sorted_data$COMMERCIAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
+plot(commercial)
 ```
+
+
+**TRANSPORTATION ENERGY CONSUMPTION**
+
+```{r}
+transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours[!is.na(as.numeric(sorted_data$TRANSPORTATION.Sales.Megawatthours))], start = c(1990, 1), frequency = 12)
+plot(transportation) # not sure if this is totally valid removing the NA's
+
+transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
+plot(transportation)
+```
+
+**TOTAL ENERGY CONSUMPTION**
+
+```{r}
+total <- ts(sorted_data$TOTAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
+plot(total)
+```
+
+General takeaways:
+
+-   trends/seasonality does not look the same across consumption type (residential, commercial, transportation, etc).
+-   transportation has a bunch of missingness (especially in the earlier years)
+    -   it also took a much more noticeable COVID hit than the other sectors (and surprisingly consumption didn't go up that much in 2020 for residential which is kind of surprising given that people were theoretically at home more)
+-   commercial sees a much steeper upward trend in the early 2000's
+
+## SUPPLEMENTARY DATA
+
+### Monthly Temperature Data for all of California
+
+```{r, results='hold'}
+# Load the Monthly Temperature Data
+
+temp_data <- read_excel('./data/ca_monthly_temp_data.xlsx')
+temp_ts <- ts(temp_data$Value, frequency = 12, start=c(1990,1))
+plot(temp_ts, ylab="Temperature", main="Monthly Average Temperature 1990-2023")
+```
+
+### Yearly Population Data
+
+```{r}
+
+pop_data <- read_excel('./data/ca_pop_1990_2022.xlsx', sheet="Data", col_names=FALSE)
+pop_ts <- ts(pop_data[2], frequency = 1, start=1990)
+plot(pop_ts, ylab="Population (millions)", main="Population of California 1990-2022")
+```
+
+
+
+## TRAIN TEST SPLITS
+
+```{r}
+#train/test split at 1990
+train_res_1990 <- window(residential, start=1990, end=c(2022, 6))
+test_res_1990 <- window(residential, start=c(2022, 7), end=c(2023, 7))
+train_test_res_1990 <- window(residential, start=1990, end=c(2023, 7))
+
+#train/test split at 2005
+train_res_2005 <- window(residential, start=2005, end=c(2022, 6))
+test_res_2005 <- window(residential, start=c(2022, 7), end=c(2023, 7))
+train_test_res_2005 <- window(residential, start=1990, end=c(2023, 7))
+
+
+#train/test split at 2013
+train_res_2013 <- window(residential, start=2013, end=c(2022, 6))
+test_res_2013 <- window(residential, start=c(2022, 7), end=c(2023, 7))
+train_test_res_2013 <- window(residential, start=2013, end=c(2023, 7))
+```
+
+
+## BASELINE MODELS
+
+### Seasonal Naive baseline model
+
+The point forecasts are the same for each of these models, but the information criteria estimates are different (and the confidence interval bands are different for each)
+
+MAPE for 1990: 5.521388
+RMSE for 1990: 562980.8
+
+MAPE for 2005: 6.094906
+RMSE for 2005: 657427
+
+MAPE for 2013: 7.692256
+RMSE for 2013: 797692.8
+
+Both are increasing as we narrow the window size.
+
+```{r}
+snaive_model_1990 = snaive(train_res_1990, h=12)
+accuracy(snaive_model_1990)
+
+snaive_model_2005 = snaive(train_res_2005, h=12)
+accuracy(snaive_model_2005)
+
+snaive_model_2013 = snaive(train_res_2013, h=12)
+accuracy(snaive_model_2013)
+
+plot(snaive_model_1990)
+```
+
+### Exponential Smoothing
+
+model type: ETS(M,N,M) 
+MAPE for 1990: 4.667398
+RMSE for 1990: 466188.8
+
+model type: ETS(M,N,A) 
+MAPE for 2005: 5.300409
+RMSE for 2005: 535969.3
+
+model type: ETS(M,N,M) 
+MAPE for 2013: 5.55343
+RMSE for 2013: 573835.4
+
+Weird that with different windows a different ETS model is being specified. 
+Similar to seasonal naive, as we increase the size of training data, we increase the MAPE and RSME values.
+
+```{r}
+ets_model_1990 = ets(train_res_1990)
+summary(ets_model_1990)
+
+ets_model_2005 = ets(train_res_2005)
+summary(ets_model_2005)
+
+ets_model_2013 = ets(train_res_2013)
+summary(ets_model_2013)
+```
+
+```{r}
+plot(forecast(ets_model_1990, h=12))
+```
+
+### Linear Regression
+
+MAPE for 1990: 6.877424
+RMSE for 1990: 610919.6
+
+MAPE for 2005: 5.426142
+RMSE for 2005: 533482.7
+
+MAPE for 2013: 5.572336
+RMSE for 2013: 570245.5
+
+Unlike the other baselines, this slightly improves with time and then gets worse again.
+
+```{r}
+tslm_model_1990 = tslm(train_res_1990 ~ trend + season)
+summary(tslm_model_1990)
+accuracy(tslm_model_1990)
+
+tslm_model_2005 = tslm(train_res_2005 ~ trend + season)
+summary(tslm_model_2005)
+accuracy(tslm_model_2005)
+
+tslm_model_2013 = tslm(train_res_2013 ~ trend + season)
+summary(tslm_model_2013)
+accuracy(tslm_model_2013)
+```
+
+```{r}
+plot(forecast(tslm_model_1990, h=12))
+```
+
+### Arima
 
 *Evaluate Distribution*
 
@@ -162,54 +331,10 @@ checkresiduals(residential_auto_arima)
 
 -   Residuals are not white noise
 
-**COMMERCIAL ENERGY CONSUMPTION**
 
-```{r}
-commercial <- ts(sorted_data$COMMERCIAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
-plot(commercial)
-```
 
-**TRANSPORTATION ENERGY CONSUMPTION**
 
-```{r}
-transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours[!is.na(as.numeric(sorted_data$TRANSPORTATION.Sales.Megawatthours))], start = c(1990, 1), frequency = 12)
-plot(transportation) # not sure if this is totally valid removing the NA's
 
-transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
-plot(transportation)
-```
 
-**TOTAL ENERGY CONSUMPTION**
 
-```{r}
-total <- ts(sorted_data$TOTAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
-plot(total)
-```
 
-General takeaways:
-
--   trends/seasonality does not look the same across consumption type (residential, commercial, transportation, etc).
--   transportation has a bunch of missingness (especially in the earlier years)
-    -   it also took a much more noticeable COVID hit than the other sectors (and surprisingly consumption didn't go up that much in 2020 for residential which is kind of surprising given that people were theoretically at home more)
--   commercial sees a much steeper upward trend in the early 2000's
-
-## Supplementary Data
-
-### Monthly Temperature Data for all of California
-
-```{r, results='hold'}
-# Load the Monthly Temperature Data
-
-temp_data <- read_excel('./data/ca_monthly_temp_data.xlsx')
-temp_ts <- ts(temp_data$Value, frequency = 12, start=c(1990,1))
-plot(temp_ts, ylab="Temperature", main="Monthly Average Temperature 1990-2023")
-```
-
-### Yearly Population Data
-
-```{r}
-
-pop_data <- read_excel('./data/ca_pop_1990_2022.xlsx', sheet="Data", col_names=FALSE)
-pop_ts <- ts(pop_data[2], frequency = 1, start=1990)
-plot(pop_ts, ylab="Population (millions)", main="Population of California 1990-2022")
-```
