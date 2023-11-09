@@ -126,12 +126,28 @@ plot(temp_ts, ylab="Temperature", main="Monthly Average Temperature 1990-2023")
 
 ```{r}
 
-pop_data <- read_excel('./data/ca_pop_1990_2022.xlsx', sheet="Data", col_names=FALSE)
+pop_data <- read_excel('./data/ca_pop_1990_2022.xlsx', sheet="Data")
 pop_ts <- ts(pop_data[2], frequency = 1, start=1990)
 plot(pop_ts, ylab="Population (millions)", main="Population of California 1990-2022")
 ```
+### UNEMPLOYMENT DATA
 
+```{r}
+unemp_data <- read_excel('./data/bls_cali_seasonal_adj_1990_2023.xlsx', 
+                         sheet="Sheet1")
 
+unemp_rate_ts <- ts(unemp_data$`unemployment rate`, frequency = 12, start =c(1990,1))
+plot(unemp_rate_ts, ylab="Unemployment rate", main="Monthly unemployement rate in
+     California 1990-2023")
+```
+*** General observations:
+ - Almost at its lowest levels pre-Covid and post 2022
+ - Before Covid, peak was in 2009 - after the financial crisis of 2008. However, then, double-digit unemployed stayed till 2012 which hasn't happened after Covid.
+ - Before 2008 recession, near double digit unemployement in 1992-93 due to national recession - job cuts in manufacturing
+ 
+```{r}
+plot(decompose(unemp_rate_ts))
+```
 
 ## TRAIN TEST SPLITS
 
@@ -246,6 +262,100 @@ accuracy(tslm_model_2013)
 ```{r}
 plot(forecast(tslm_model_1990, h=12))
 ```
+```{r}
+tslm_model_1990
+```
+
+
+### Linear Regression with temperature and unemployment
+
+## First, creating a dataframe with all variables from 1990-2022
+
+```{r}
+# Create a sequence of years and months from 1990 to 2022
+dates <- seq(as.Date("1990-01-01"), as.Date("2022-12-01"), by="months")
+
+# Create a dataframe with Year and Month columns
+residential_reg_df <- data.frame(Year = as.integer(format(dates, "%Y")), 
+                                 Month = as.integer(format(dates, "%m")))
+
+# Extract yearly population values from the pop_data dataframe
+residential_reg_df$pop <- as.numeric(rep(pop_data$population, each = 12))
+
+# Extract consumption data from sorted_data
+residential_reg_df$elec_cons <- as.numeric(subset(sorted_data, Year >= 1990 & 
+                                        Year <= 2022)$RESIDENTIAL.Sales.Megawatthours)
+
+# Extract temperature data from temp_data
+# First, we create a new 'Year' column by extracting the first four characters from 'Date'
+
+temp_data$Year <- as.numeric(substr(temp_data$Date, 1, 4))
+residential_reg_df$temp <- as.numeric(subset(temp_data,Year >= 1990 & 
+                                        Year <= 2022)$Value)
+
+# Extract unemployment rate data from unemp_data
+residential_reg_df$unemp_rate <- as.numeric(subset(unemp_data, Year >= 1990 & 
+                                              Year <= 2022)$`unemployment rate`)
+
+# Calculate consumption per capita by dividing consumption by population
+# consumption is MWhrs per million population
+residential_reg_df$cons_capita <- residential_reg_df$elec_cons/(residential_reg_df$pop)
+
+# Optionally, you can set row names if needed
+rownames(residential_reg_df) <- NULL
+
+# Print the first few rows to verify
+head(residential_reg_df, 15)
+
+```
+
+```{r}
+# Adding normalized values of 'temperature' and 'unemployment rate' to the dataframe 
+residential_reg_df$norm_temp <- scale(residential_reg_df$temp)
+residential_reg_df$norm_unemp_rate <- scale(residential_reg_df$unemp_rate)
+
+# First, we will regress only with temperature
+y_var <- ts(residential_reg_df$cons_capita, start = c(1990,1), frequency = 12)
+x1_var <- ts(residential_reg_df$temp, start = c(1990,1), frequency = 12)
+  
+tslm_residential_temp <- tslm(y_var ~ x1_var, lambda = 'auto')  
+
+# Summarize the regression results
+summary(tslm_residential_temp)
+accuracy(tslm_residential_temp)
+
+
+# Now we add unemployment to this
+x2_var <- ts(residential_reg_df$unemp_rate, start = c(1990,1), frequency = 12)
+tslm_residential_temp_unemp <- tslm(y_var ~ x1_var + x2_var, lambda = 'auto') 
+
+# Summarize the regression results
+summary(tslm_residential_temp_unemp)
+accuracy(tslm_residential_temp_unemp)
+```
+
+*** Key takeaways: 
+ - temperature is statistically significant, unemployment rate is
+ not - maybe look at other labour market variables (or normalize and check)
+ 
+ - Do we look at adjusted R^2? why not? 
+ 
+ - forecast is not working on this for some reason - need to debug
+
+```{r}
+### Experimenting with other regressions
+
+y_var <- ts(residential_reg_df$cons, start = c(1990,1), frequency = 12) # consumption instead of consumption per capita
+
+tslm_residential_tot_temp <- tslm(y_var ~ x1_var, lambda = 'auto') 
+
+accuracy(tslm_residential_tot_temp)
+summary(tslm_residential_tot_temp)
+
+# Takeaway: No impact of standardizing consumption by population in previous regression
+```
+*** Next step: combine Claire's autoregression with temperature (and any other 
+variable) to create models discussed in Lecture-7
 
 ### Arima
 
