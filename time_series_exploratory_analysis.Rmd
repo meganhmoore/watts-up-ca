@@ -1,9 +1,10 @@
 ---
 title: "Watts Up CA"
-author: "Kathryn Link-Oberstar"
+author: "Claire Boyd, Kathryn Link-Oberstar, Megan Moore, Eshan Prasher"
 date: "`r Sys.Date()`"
 output: pdf_document
 ---
+
 
 ```{r}
 suppressMessages({
@@ -18,7 +19,6 @@ suppressMessages({
 })
 
 # change this depending on where you want to start your wd()
-# setwd("~/Desktop/Graduate School/Fall 2023/Time Series Analysis and Forecasting /Data/Monthly Consumption")
 # setwd("~/Documents/time_series/final_project/watts-up-ca/")
 ```
 
@@ -367,16 +367,16 @@ summary(tslm_residential_tot_temp)
 *Evaluate Distribution*
 
 ```{r}
-shapiro.test(residential)
+shapiro.test(train_res_1990)
 ```
 
 -   p-value below significance threshold
 -   data not normally distributed and will benefit from Box-Cox Transformation
 
 ```{r}
-lambda <- BoxCox.lambda(residential)
-residential_transformed <- BoxCox(residential, lambda)
-plot(residential_transformed)
+lambda <- BoxCox.lambda(train_res_1990)
+train_res_1990_transformed <- BoxCox(train_res_1990, lambda)
+plot(train_res_1990)
 print(lambda)
 ```
 
@@ -385,7 +385,7 @@ print(lambda)
 *Evaluate Stationarity*
 
 ```{r}
-kpss_result <- kpss.test(residential_transformed)
+kpss_result <- kpss.test(train_res_1990_transformed)
 print(kpss_result)
 ```
 
@@ -396,9 +396,9 @@ print(kpss_result)
 *Make Stationary with differencing*
 
 ```{r}
-residential_first_diff <- diff(residential_transformed, differences = 1)
-plot(residential_first_diff, main="1st Order Differenced Data")
-kpss_result <- kpss.test(residential_first_diff)
+train_res_1990_transformed_first_diff <- diff(train_res_1990_transformed, differences = 1)
+plot(train_res_1990_transformed_first_diff, main="1st Order Differenced Data")
+kpss_result <- kpss.test(train_res_1990_transformed_first_diff)
 print(kpss_result)
 ```
 
@@ -408,40 +408,127 @@ print(kpss_result)
 *Seasonal Differencing*
 
 ```{r}
-residential_seasonal_diff <- diff(residential_first_diff, lag = 12, differences = 1)
-plot(residential_seasonal_diff)
+train_res_1990_transformed_first_diff_sdiff <- diff(train_res_1990_transformed_first_diff, lag = 12, differences = 1)
+plot(train_res_1990_transformed_first_diff_sdiff)
 ```
 
 *ACF & PACF*
 
 ```{r}
-Acf(residential_seasonal_diff)
-Pacf(residential_seasonal_diff)
+Acf(train_res_1990_transformed_first_diff_sdiff)
+Pacf(train_res_1990_transformed_first_diff_sdiff)
 ```
 
 -   Seasonality
 
-**MODELING**
+*Arima Model*
 
 ```{r}
-plot(residential_seasonal_diff)
+plot(train_res_1990_transformed_first_diff_sdiff)
 ```
 
 *Auto Arima*
 
 ```{r}
-residential_auto_arima <- auto.arima(residential, 
+residential_auto_arima_1990 <- auto.arima(train_res_1990, 
                                      seasonal = TRUE, 
                                      trace = FALSE, 
                                      stepwise = FALSE, 
                                      #approximation = FALSE, 
                                      allowdrift = TRUE, 
                                      lambda = 'auto')
-summary(residential_auto_arima)
+summary(residential_auto_arima_1990)
 ```
 
 ```{r}
-checkresiduals(residential_auto_arima)
+checkresiduals(residential_auto_arima_1990)
 ```
 
+
 -   Residuals are not white noise
+
+```{r}
+residential_auto_arima_2005 <- auto.arima(train_res_2005, 
+                                     seasonal = TRUE, 
+                                     trace = FALSE, 
+                                     stepwise = FALSE, 
+                                     #approximation = FALSE, 
+                                     allowdrift = TRUE, 
+                                     lambda = 'auto')
+summary(residential_auto_arima_2005)
+```
+
+```{r}
+checkresiduals(residential_auto_arima_2005)
+```
+
+
+```{r}
+residential_auto_arima_2013 <- auto.arima(train_res_2013, 
+                                     seasonal = TRUE, 
+                                     trace = FALSE, 
+                                     stepwise = FALSE, 
+                                     #approximation = FALSE, 
+                                     allowdrift = TRUE, 
+                                     lambda = 'auto')
+summary(residential_auto_arima_2013)
+```
+
+```{r}
+checkresiduals(residential_auto_arima_2013)
+```
+## MODEL TESTING
+
+*Models to Test*
+
+```{r}
+models_to_test <- list(
+  list("Residential Auto Arima - 1990", residential_auto_arima_1990, test_res_1990, 12),
+  list("Residential Auto Arima - 2005", residential_auto_arima_2005, test_res_2005, 12),
+  list("Residential Auto Arima - 2013", residential_auto_arima_2013, test_res_2013, 12),
+  list("Residential Seasonal Naive - 1990", snaive_model_1990, test_res_1990, 12),
+  list("Residential Seasonal Naive - 2005", snaive_model_2005, test_res_2005, 12),
+  list("Residential Seasonal Naive - 2013", snaive_model_2013, test_res_2013, 12),
+  list("ETS - 1990", ets_model_1990, test_res_1990, 12),
+  list("ETS - 2005", ets_model_2005, test_res_2005, 12),
+  list("ETS - 2013", ets_model_2013, test_res_2013, 12),
+  list("Linear Regression - 1990", tslm_model_1990, test_res_1990, 12),
+  list("Linear Regression - 2005", tslm_model_2005, test_res_2005, 12),
+  list("Linear Regression - 2013", tslm_model_2013, test_res_2013, 12)
+
+)
+
+evaluate_models <- function(models_to_test) {
+  results <- list()
+  
+  for (model_info in models_to_test) {
+    
+    model_name <- model_info[[1]]
+    model <- model_info[[2]]
+    test_data <- model_info[[3]]
+    horizon <- model_info[[4]]
+    
+    # Forecasting
+    model_forecast <- forecast(model, h=horizon)
+    
+    # Error calculation
+    errors <- accuracy(model_forecast, test_data)
+    MAE <- errors["Test set", "MAE"]
+    RMSE <- errors["Test set", "RMSE"]
+    AICc <- ifelse(exists("aicc", where = model), model$aicc, NA)
+    
+    results[[model_name]] <- list(MAE = MAE, RMSE = RMSE, AICc = AICc, Forecast = model_forecast)
+    
+    cat(paste0(model_name, " Model Performance on Test Data: \n",
+               "MAE: ", MAE, "\n",
+               "RMSE: ", RMSE, "\n",
+               "AICc: ", AICc, "\n\n"))
+  }
+  
+  return(results)
+}
+
+results <- evaluate_models(models_to_test)
+
+
+```
