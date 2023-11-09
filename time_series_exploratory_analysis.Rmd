@@ -101,6 +101,27 @@ plot(decompose(temp_ts))
 
 With the temperature data we do not seem to have a notable upward or downward trend, though from the decomposition it might be experiencing a slight positive trend. We see a consistent 12-month seasonal trend that seems to be additive in nature given that the amplitude of the variance is not growing from the looks of it.
 
+Read in minimum temperatures.
+
+```{r}
+min_temp <- read_csv(url("https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/statewide/time-series/4/tmin/all/1/1990-2023.csv?base_prd=true&begbaseyear=1901&endbaseyear=2000"), skip = 4)
+
+min_temp_ts <- ts(min_temp$`Value`, frequency = 12, start =c(1990,1))
+
+plot(min_temp_ts)
+```
+
+Read in maximum temperatures.
+
+```{r}
+max_temp <- read_csv(url("https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/statewide/time-series/4/tmax/all/1/1990-2023.csv?base_prd=true&begbaseyear=1901&endbaseyear=2000"), skip = 4)
+
+max_temp_ts <- ts(max_temp$`Value`, frequency = 12, start =c(1990,1))
+
+plot(max_temp_ts)
+```
+
+
 ### Yearly Population Data
 
 ```{r}
