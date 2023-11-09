@@ -63,7 +63,7 @@ residential <- ts(as.numeric(sorted_data$RESIDENTIAL.Sales.Megawatthours), start
 plot(residential)
 ```
 
-### Evaluate Dataset 
+### Evaluate Dataset
 
 Observations from the residential ts() object before any transformations:
 
@@ -75,7 +75,6 @@ Observations from the residential ts() object before any transformations:
 
 -   *stationarity*: given the above observations that we can observe both trends and seasonal effects, we can guess that the time series data is not yet stationary. We can test this below.
 
-
 ### Compare to other types of electricity consumption
 
 **COMMERCIAL ENERGY CONSUMPTION**
@@ -84,7 +83,6 @@ Observations from the residential ts() object before any transformations:
 commercial <- ts(sorted_data$COMMERCIAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
 plot(commercial)
 ```
-
 
 **TRANSPORTATION ENERGY CONSUMPTION**
 
@@ -122,6 +120,12 @@ temp_ts <- ts(temp_data$Value, frequency = 12, start=c(1990,1))
 plot(temp_ts, ylab="Temperature", main="Monthly Average Temperature 1990-2023")
 ```
 
+```{r, results=TRUE}
+plot(decompose(temp_ts))
+```
+
+With the temperature data we do not seem to have a notable upward or downward trend, though from the decomposition it might be experiencing a slight positive trend. We see a consistent 12-month seasonal trend that seems to be additive in nature given that the amplitude of the variance is not growing from the looks of it.
+
 ### Yearly Population Data
 
 ```{r}
@@ -130,6 +134,9 @@ pop_data <- read_excel('./data/ca_pop_1990_2022.xlsx', sheet="Data")
 pop_ts <- ts(pop_data[2], frequency = 1, start=1990)
 plot(pop_ts, ylab="Population (millions)", main="Population of California 1990-2022")
 ```
+
+For the population data we see an upward trend that may be leveling off (would maybe need damping) , or this may be due to the effects of covid and will continue linearly increasing. There is no seasonality as these are annual population estimates.
+
 ### UNEMPLOYMENT DATA
 
 ```{r}
@@ -140,11 +147,9 @@ unemp_rate_ts <- ts(unemp_data$`unemployment rate`, frequency = 12, start =c(199
 plot(unemp_rate_ts, ylab="Unemployment rate", main="Monthly unemployement rate in
      California 1990-2023")
 ```
-*** General observations:
- - Almost at its lowest levels pre-Covid and post 2022
- - Before Covid, peak was in 2009 - after the financial crisis of 2008. However, then, double-digit unemployed stayed till 2012 which hasn't happened after Covid.
- - Before 2008 recession, near double digit unemployement in 1992-93 due to national recession - job cuts in manufacturing
- 
+
+\*\*\* General observations: - Almost at its lowest levels pre-Covid and post 2022 - Before Covid, peak was in 2009 - after the financial crisis of 2008. However, then, double-digit unemployed stayed till 2012 which hasn't happened after Covid. - Before 2008 recession, near double digit unemployement in 1992-93 due to national recession - job cuts in manufacturing
+
 ```{r}
 plot(decompose(unemp_rate_ts))
 ```
@@ -169,21 +174,17 @@ test_res_2013 <- window(residential, start=c(2022, 7), end=c(2023, 7))
 train_test_res_2013 <- window(residential, start=2013, end=c(2023, 7))
 ```
 
-
 ## BASELINE MODELS
 
 ### Seasonal Naive baseline model
 
 The point forecasts are the same for each of these models, but the information criteria estimates are different (and the confidence interval bands are different for each)
 
-MAPE for 1990: 5.521388
-RMSE for 1990: 562980.8
+MAPE for 1990: 5.521388 RMSE for 1990: 562980.8
 
-MAPE for 2005: 6.094906
-RMSE for 2005: 657427
+MAPE for 2005: 6.094906 RMSE for 2005: 657427
 
-MAPE for 2013: 7.692256
-RMSE for 2013: 797692.8
+MAPE for 2013: 7.692256 RMSE for 2013: 797692.8
 
 Both are increasing as we narrow the window size.
 
@@ -202,20 +203,13 @@ plot(snaive_model_1990)
 
 ### Exponential Smoothing
 
-model type: ETS(M,N,M) 
-MAPE for 1990: 4.667398
-RMSE for 1990: 466188.8
+model type: ETS(M,N,M) MAPE for 1990: 4.667398 RMSE for 1990: 466188.8
 
-model type: ETS(M,N,A) 
-MAPE for 2005: 5.300409
-RMSE for 2005: 535969.3
+model type: ETS(M,N,A) MAPE for 2005: 5.300409 RMSE for 2005: 535969.3
 
-model type: ETS(M,N,M) 
-MAPE for 2013: 5.55343
-RMSE for 2013: 573835.4
+model type: ETS(M,N,M) MAPE for 2013: 5.55343 RMSE for 2013: 573835.4
 
-Weird that with different windows a different ETS model is being specified. 
-Similar to seasonal naive, as we increase the size of training data, we increase the MAPE and RSME values.
+Weird that with different windows a different ETS model is being specified. Similar to seasonal naive, as we increase the size of training data, we increase the MAPE and RSME values.
 
 ```{r}
 ets_model_1990 = ets(train_res_1990)
@@ -234,14 +228,11 @@ plot(forecast(ets_model_1990, h=12))
 
 ### Linear Regression
 
-MAPE for 1990: 6.877424
-RMSE for 1990: 610919.6
+MAPE for 1990: 6.877424 RMSE for 1990: 610919.6
 
-MAPE for 2005: 5.426142
-RMSE for 2005: 533482.7
+MAPE for 2005: 5.426142 RMSE for 2005: 533482.7
 
-MAPE for 2013: 5.572336
-RMSE for 2013: 570245.5
+MAPE for 2013: 5.572336 RMSE for 2013: 570245.5
 
 Unlike the other baselines, this slightly improves with time and then gets worse again.
 
@@ -262,10 +253,10 @@ accuracy(tslm_model_2013)
 ```{r}
 plot(forecast(tslm_model_1990, h=12))
 ```
+
 ```{r}
 tslm_model_1990
 ```
-
 
 ### Linear Regression with temperature and unemployment
 
@@ -332,15 +323,29 @@ tslm_residential_temp_unemp <- tslm(y_var ~ x1_var + x2_var, lambda = 'auto')
 # Summarize the regression results
 summary(tslm_residential_temp_unemp)
 accuracy(tslm_residential_temp_unemp)
+
+# Then just regress with population 
+x3_var <- ts(residential_reg_df$unemp_rate, start = c(1990,1), frequency = 12)
+tslm_residential_pop <- tslm(y_var ~ x3_var, lambda = 'auto')  
+
+# Summarize the regression results
+summary(tslm_residential_pop)
+accuracy(tslm_residential_pop)
 ```
 
-*** Key takeaways: 
- - temperature is statistically significant, unemployment rate is
- not - maybe look at other labour market variables (or normalize and check)
- 
- - Do we look at adjusted R^2? why not? 
- 
- - forecast is not working on this for some reason - need to debug
+\*\*\* Key takeaways: - temperature is statistically significant, unemployment rate is not - maybe look at other labour market variables (or normalize and check), population is also not statistically significant indicating that consumption increases are not necessarily attributable to more people using electricity.
+
+-   Do we look at adjusted R\^2? why not?
+
+-   forecast is not working on this for some reason - need to debug - I think this is due to the fact that we need to know the "future" independent variables
+
+```{r}
+# plot(forecast(tslm_residential_pop), h=12)
+# TODO forecast 
+# 1) train model on only training set 
+# 2) set temp/pop/whatever is being regressed on aside for test set
+# 3) figure out how to provide the x_vals for the forcast
+```
 
 ```{r}
 ### Experimenting with other regressions
@@ -354,8 +359,8 @@ summary(tslm_residential_tot_temp)
 
 # Takeaway: No impact of standardizing consumption by population in previous regression
 ```
-*** Next step: combine Claire's autoregression with temperature (and any other 
-variable) to create models discussed in Lecture-7
+
+\*\*\* Next step: combine Claire's autoregression with temperature (and any other variable) to create models discussed in Lecture-7
 
 ### Arima
 
@@ -438,6 +443,9 @@ summary(residential_auto_arima_1990)
 ```{r}
 checkresiduals(residential_auto_arima_1990)
 ```
+
+
+-   Residuals are not white noise
 
 ```{r}
 residential_auto_arima_2005 <- auto.arima(train_res_2005, 
@@ -524,7 +532,3 @@ results <- evaluate_models(models_to_test)
 
 
 ```
-
-
-
-
