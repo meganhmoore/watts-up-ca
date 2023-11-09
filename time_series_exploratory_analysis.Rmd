@@ -56,7 +56,7 @@ sorted_data <- combined_data %>%
   arrange(Year, Month)
 ```
 
-## RESIDENTIAL ENERGY CONSUMPTION
+## DATA EXPLORATION
 
 ```{r}
 residential <- ts(as.numeric(sorted_data$RESIDENTIAL.Sales.Megawatthours), start = c(1990, 1), frequency = 12)
@@ -75,31 +75,6 @@ Observations from the residential ts() object before any transformations:
 
 -   *stationarity*: given the above observations that we can observe both trends and seasonal effects, we can guess that the time series data is not yet stationary. We can test this below.
 
-### Compare to other types of electricity consumption
-
-**COMMERCIAL ENERGY CONSUMPTION**
-
-```{r}
-commercial <- ts(sorted_data$COMMERCIAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
-plot(commercial)
-```
-
-**TRANSPORTATION ENERGY CONSUMPTION**
-
-```{r}
-transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours[!is.na(as.numeric(sorted_data$TRANSPORTATION.Sales.Megawatthours))], start = c(1990, 1), frequency = 12)
-plot(transportation) # not sure if this is totally valid removing the NA's
-
-transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
-plot(transportation)
-```
-
-**TOTAL ENERGY CONSUMPTION**
-
-```{r}
-total <- ts(sorted_data$TOTAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
-plot(total)
-```
 
 General takeaways:
 
@@ -129,7 +104,6 @@ With the temperature data we do not seem to have a notable upward or downward tr
 ### Yearly Population Data
 
 ```{r}
-
 pop_data <- read_excel('./data/ca_pop_1990_2022.xlsx', sheet="Data")
 pop_ts <- ts(pop_data[2], frequency = 1, start=1990)
 plot(pop_ts, ylab="Population (millions)", main="Population of California 1990-2022")
@@ -137,14 +111,14 @@ plot(pop_ts, ylab="Population (millions)", main="Population of California 1990-2
 
 For the population data we see an upward trend that may be leveling off (would maybe need damping) , or this may be due to the effects of covid and will continue linearly increasing. There is no seasonality as these are annual population estimates.
 
-### UNEMPLOYMENT DATA
+### Unemployment Data
 
 ```{r}
 unemp_data <- read_excel('./data/bls_cali_seasonal_adj_1990_2023.xlsx', 
                          sheet="Sheet1")
 
 unemp_rate_ts <- ts(unemp_data$`unemployment rate`, frequency = 12, start =c(1990,1))
-plot(unemp_rate_ts, ylab="Unemployment rate", main="Monthly unemployement rate in
+plot(unemp_rate_ts, ylab="Unemployment rate", main="Monthly unemployment rate in
      California 1990-2023")
 ```
 
@@ -167,7 +141,6 @@ train_res_2005 <- window(residential, start=2005, end=c(2022, 6))
 test_res_2005 <- window(residential, start=c(2022, 7), end=c(2023, 7))
 train_test_res_2005 <- window(residential, start=1990, end=c(2023, 7))
 
-
 #train/test split at 2013
 train_res_2013 <- window(residential, start=2013, end=c(2022, 6))
 test_res_2013 <- window(residential, start=c(2022, 7), end=c(2023, 7))
@@ -189,17 +162,23 @@ MAPE for 2013: 7.692256 RMSE for 2013: 797692.8
 Both are increasing as we narrow the window size.
 
 ```{r}
-snaive_model_1990 = snaive(train_res_1990, h=12)
+snaive_model_1990 = snaive(train_res_1990, lambda='auto', h=12)
 accuracy(snaive_model_1990)
 
-snaive_model_2005 = snaive(train_res_2005, h=12)
+snaive_model_2005 = snaive(train_res_2005, lambda='auto', h=12)
 accuracy(snaive_model_2005)
 
-snaive_model_2013 = snaive(train_res_2013, h=12)
+snaive_model_2013 = snaive(train_res_2013, lambda='auto', h=12)
 accuracy(snaive_model_2013)
 
-plot(snaive_model_1990)
+plot(snaive_model_2013)
 ```
+
+```{r}
+Acf(snaive_model_1990$residuals, lag=100)
+Pacf(snaive_model_1990$residuals, lag=100)
+```
+
 
 ### Exponential Smoothing
 
@@ -212,13 +191,13 @@ model type: ETS(M,N,M) MAPE for 2013: 5.55343 RMSE for 2013: 573835.4
 Weird that with different windows a different ETS model is being specified. Similar to seasonal naive, as we increase the size of training data, we increase the MAPE and RSME values.
 
 ```{r}
-ets_model_1990 = ets(train_res_1990)
+ets_model_1990 = ets(train_res_1990,lambda='auto')
 summary(ets_model_1990)
 
-ets_model_2005 = ets(train_res_2005)
+ets_model_2005 = ets(train_res_2005,lambda='auto')
 summary(ets_model_2005)
 
-ets_model_2013 = ets(train_res_2013)
+ets_model_2013 = ets(train_res_2013,lambda='auto')
 summary(ets_model_2013)
 ```
 
@@ -249,6 +228,12 @@ tslm_model_2013 = tslm(train_res_2013 ~ trend + season)
 summary(tslm_model_2013)
 accuracy(tslm_model_2013)
 ```
+```{r}
+Acf(tslm_model_1990$residuals)
+pacf(tslm_model_1990$residuals)
+```
+
+
 
 ```{r}
 plot(forecast(tslm_model_1990, h=12))
@@ -257,110 +242,6 @@ plot(forecast(tslm_model_1990, h=12))
 ```{r}
 tslm_model_1990
 ```
-
-### Linear Regression with temperature and unemployment
-
-## First, creating a dataframe with all variables from 1990-2022
-
-```{r}
-# Create a sequence of years and months from 1990 to 2022
-dates <- seq(as.Date("1990-01-01"), as.Date("2022-12-01"), by="months")
-
-# Create a dataframe with Year and Month columns
-residential_reg_df <- data.frame(Year = as.integer(format(dates, "%Y")), 
-                                 Month = as.integer(format(dates, "%m")))
-
-# Extract yearly population values from the pop_data dataframe
-residential_reg_df$pop <- as.numeric(rep(pop_data$population, each = 12))
-
-# Extract consumption data from sorted_data
-residential_reg_df$elec_cons <- as.numeric(subset(sorted_data, Year >= 1990 & 
-                                        Year <= 2022)$RESIDENTIAL.Sales.Megawatthours)
-
-# Extract temperature data from temp_data
-# First, we create a new 'Year' column by extracting the first four characters from 'Date'
-
-temp_data$Year <- as.numeric(substr(temp_data$Date, 1, 4))
-residential_reg_df$temp <- as.numeric(subset(temp_data,Year >= 1990 & 
-                                        Year <= 2022)$Value)
-
-# Extract unemployment rate data from unemp_data
-residential_reg_df$unemp_rate <- as.numeric(subset(unemp_data, Year >= 1990 & 
-                                              Year <= 2022)$`unemployment rate`)
-
-# Calculate consumption per capita by dividing consumption by population
-# consumption is MWhrs per million population
-residential_reg_df$cons_capita <- residential_reg_df$elec_cons/(residential_reg_df$pop)
-
-# Optionally, you can set row names if needed
-rownames(residential_reg_df) <- NULL
-
-# Print the first few rows to verify
-head(residential_reg_df, 15)
-
-```
-
-```{r}
-# Adding normalized values of 'temperature' and 'unemployment rate' to the dataframe 
-residential_reg_df$norm_temp <- scale(residential_reg_df$temp)
-residential_reg_df$norm_unemp_rate <- scale(residential_reg_df$unemp_rate)
-
-# First, we will regress only with temperature
-y_var <- ts(residential_reg_df$cons_capita, start = c(1990,1), frequency = 12)
-x1_var <- ts(residential_reg_df$temp, start = c(1990,1), frequency = 12)
-  
-tslm_residential_temp <- tslm(y_var ~ x1_var, lambda = 'auto')  
-
-# Summarize the regression results
-summary(tslm_residential_temp)
-accuracy(tslm_residential_temp)
-
-
-# Now we add unemployment to this
-x2_var <- ts(residential_reg_df$unemp_rate, start = c(1990,1), frequency = 12)
-tslm_residential_temp_unemp <- tslm(y_var ~ x1_var + x2_var, lambda = 'auto') 
-
-# Summarize the regression results
-summary(tslm_residential_temp_unemp)
-accuracy(tslm_residential_temp_unemp)
-
-# Then just regress with population 
-x3_var <- ts(residential_reg_df$unemp_rate, start = c(1990,1), frequency = 12)
-tslm_residential_pop <- tslm(y_var ~ x3_var, lambda = 'auto')  
-
-# Summarize the regression results
-summary(tslm_residential_pop)
-accuracy(tslm_residential_pop)
-```
-
-\*\*\* Key takeaways: - temperature is statistically significant, unemployment rate is not - maybe look at other labour market variables (or normalize and check), population is also not statistically significant indicating that consumption increases are not necessarily attributable to more people using electricity.
-
--   Do we look at adjusted R\^2? why not?
-
--   forecast is not working on this for some reason - need to debug - I think this is due to the fact that we need to know the "future" independent variables
-
-```{r}
-# plot(forecast(tslm_residential_pop), h=12)
-# TODO forecast 
-# 1) train model on only training set 
-# 2) set temp/pop/whatever is being regressed on aside for test set
-# 3) figure out how to provide the x_vals for the forcast
-```
-
-```{r}
-### Experimenting with other regressions
-
-y_var <- ts(residential_reg_df$cons, start = c(1990,1), frequency = 12) # consumption instead of consumption per capita
-
-tslm_residential_tot_temp <- tslm(y_var ~ x1_var, lambda = 'auto') 
-
-accuracy(tslm_residential_tot_temp)
-summary(tslm_residential_tot_temp)
-
-# Takeaway: No impact of standardizing consumption by population in previous regression
-```
-
-\*\*\* Next step: combine Claire's autoregression with temperature (and any other variable) to create models discussed in Lecture-7
 
 ### Arima
 
@@ -376,7 +257,7 @@ shapiro.test(train_res_1990)
 ```{r}
 lambda <- BoxCox.lambda(train_res_1990)
 train_res_1990_transformed <- BoxCox(train_res_1990, lambda)
-plot(train_res_1990)
+plot(train_res_1990_transformed)
 print(lambda)
 ```
 
@@ -477,6 +358,129 @@ summary(residential_auto_arima_2013)
 ```{r}
 checkresiduals(residential_auto_arima_2013)
 ```
+
+
+
+
+## MODEL 1: REGRESSION
+
+### Linear Regression with temperature and unemployment
+
+First, creating a dataframe with all variables from 1990-2022
+
+```{r}
+# Create a sequence of years and months from 1990 to 2022
+dates <- seq(as.Date("1990-01-01"), as.Date("2022-12-01"), by="months")
+
+# Create a dataframe with Year and Month columns
+residential_reg_df <- data.frame(Year = as.integer(format(dates, "%Y")), 
+                                 Month = as.integer(format(dates, "%m")))
+
+# Extract yearly population values from the pop_data dataframe
+residential_reg_df$pop <- as.numeric(rep(pop_data$population, each = 12))
+
+# Extract consumption data from sorted_data
+residential_reg_df$elec_cons <- as.numeric(subset(sorted_data, Year >= 1990 & 
+                                        Year <= 2022)$RESIDENTIAL.Sales.Megawatthours)
+
+# Extract temperature data from temp_data
+# First, we create a new 'Year' column by extracting the first four characters from 'Date'
+
+temp_data$Year <- as.numeric(substr(temp_data$Date, 1, 4))
+residential_reg_df$temp <- as.numeric(subset(temp_data,Year >= 1990 & 
+                                        Year <= 2022)$Value)
+
+# Extract unemployment rate data from unemp_data
+residential_reg_df$unemp_rate <- as.numeric(subset(unemp_data, Year >= 1990 & 
+                                              Year <= 2022)$`unemployment rate`)
+
+# Calculate consumption per capita by dividing consumption by population
+# consumption is MWhrs per million population
+residential_reg_df$cons_capita <- residential_reg_df$elec_cons/(residential_reg_df$pop)
+
+# Optionally, you can set row names if needed
+rownames(residential_reg_df) <- NULL
+
+# Print the first few rows to verify
+head(residential_reg_df, 15)
+```
+
+```{r}
+# Adding normalized values of 'temperature' and 'unemployment rate' to the dataframe 
+residential_reg_df$norm_temp <- scale(residential_reg_df$temp)
+residential_reg_df$norm_unemp_rate <- scale(residential_reg_df$unemp_rate)
+
+# First, we will regress only with temperature
+y_var <- ts(residential_reg_df$cons_capita, start = c(1990,1), frequency = 12)
+x1_var <- ts(residential_reg_df$temp, start = c(1990,1), frequency = 12)
+  
+tslm_residential_temp <- tslm(y_var ~ x1_var, lambda = 'auto')  
+
+# Summarize the regression results
+summary(tslm_residential_temp)
+accuracy(tslm_residential_temp)
+
+
+# Now we add unemployment to this
+x2_var <- ts(residential_reg_df$unemp_rate, start = c(1990,1), frequency = 12)
+tslm_residential_temp_unemp <- tslm(y_var ~ x1_var + x2_var, lambda = 'auto') 
+
+# Summarize the regression results
+summary(tslm_residential_temp_unemp)
+accuracy(tslm_residential_temp_unemp)
+
+# Then just regress with population 
+x3_var <- ts(residential_reg_df$unemp_rate, start = c(1990,1), frequency = 12)
+tslm_residential_pop <- tslm(y_var ~ x3_var, lambda = 'auto')  
+
+# Summarize the regression results
+summary(tslm_residential_pop)
+accuracy(tslm_residential_pop)
+```
+
+\*\*\* Key takeaways: - temperature is statistically significant, unemployment rate is not - maybe look at other labour market variables (or normalize and check), population is also not statistically significant indicating that consumption increases are not necessarily attributable to more people using electricity.
+
+-   Do we look at adjusted R\^2? why not?
+
+-   forecast is not working on this for some reason - need to debug - I think this is due to the fact that we need to know the "future" independent variables
+
+```{r}
+# plot(forecast(tslm_residential_pop), h=12)
+# TODO forecast 
+# 1) train model on only training set 
+# 2) set temp/pop/whatever is being regressed on aside for test set
+# 3) figure out how to provide the x_vals for the forcast
+```
+
+```{r}
+### Experimenting with other regressions
+
+y_var <- ts(residential_reg_df$cons, start = c(1990,1), frequency = 12) # consumption instead of consumption per capita
+
+tslm_residential_tot_temp <- tslm(y_var ~ x1_var, lambda = 'auto') 
+
+accuracy(tslm_residential_tot_temp)
+summary(tslm_residential_tot_temp)
+
+# Takeaway: No impact of standardizing consumption by population in previous regression
+```
+
+\*\*\* Next step: combine Claire's autoregression with temperature (and any other variable) to create models discussed in Lecture-7
+
+## MODEL 2: REGRESSION WITH ARMA ERRORS
+
+
+## MODEL 3: VECTOR AUTOREGRESSIONS (VAR and VARIMA)
+
+
+
+
+
+
+
+
+
+
 ## MODEL TESTING
 
 *Models to Test*
@@ -495,7 +499,6 @@ models_to_test <- list(
   list("Linear Regression - 1990", tslm_model_1990, test_res_1990, 12),
   list("Linear Regression - 2005", tslm_model_2005, test_res_2005, 12),
   list("Linear Regression - 2013", tslm_model_2013, test_res_2013, 12)
-
 )
 
 evaluate_models <- function(models_to_test) {
@@ -529,6 +532,31 @@ evaluate_models <- function(models_to_test) {
 }
 
 results <- evaluate_models(models_to_test)
-
-
 ```
+
+### Model application to other types of electricity consumption
+
+**COMMERCIAL ENERGY CONSUMPTION**
+
+```{r}
+commercial <- ts(sorted_data$COMMERCIAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
+plot(commercial)
+```
+
+**TRANSPORTATION ENERGY CONSUMPTION**
+
+```{r}
+transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours[!is.na(as.numeric(sorted_data$TRANSPORTATION.Sales.Megawatthours))], start = c(1990, 1), frequency = 12)
+plot(transportation) # not sure if this is totally valid removing the NA's
+
+transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
+plot(transportation)
+```
+
+**TOTAL ENERGY CONSUMPTION**
+
+```{r}
+total <- ts(sorted_data$TOTAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
+plot(total)
+```
+
