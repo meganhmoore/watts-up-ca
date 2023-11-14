@@ -1,5 +1,5 @@
 ---
-title: "Watts Up CA"
+title: "Watts Up CA: Models"
 author: "Claire Boyd, Kathryn Link-Oberstar, Megan Moore, Eshan Prasher"
 date: "`r Sys.Date()`"
 output: pdf_document
@@ -18,70 +18,11 @@ suppressMessages({
   library(tidyr)
 })
 
-# change this depending on where you want to start your wd()
-# setwd("~/Documents/time_series/final_project/watts-up-ca/")
-```
-
-## LOAD DATA
-
-```{r}
-# Load the Energy Consumption Data
-pathname <- "./data/electricity_consumption_data/"
-files <- list.files(path=pathname, pattern = "\\.(xls|xlsx)$")
-print(files)
-combined_data <- data.frame()
-
-# Convert Files to df, collapse the 3 header columns into 1 header
-for (file in files) {
-  full_path <- file.path(pathname, file)
-  data <- read_excel(full_path, col_names = FALSE)
-  new_headers <- apply(data[1:3, ], 2, function(x) paste(na.omit(x), collapse = " "))
-  names(data) <- new_headers
-  data <- data[-(1:3), ]
-  data <- data.frame(lapply(data, function(x) {
-    if(is.factor(x)) as.character(x) else x
-  }), stringsAsFactors = FALSE)
-  combined_data <- bind_rows(combined_data, data)
-}
-
-# Make Month and Year Numeric
-combined_data$Month <- as.numeric(combined_data$Month)
-combined_data$Year <- as.numeric(combined_data$Year)
-
-# Filter data to exclude NA and only include CA
-combined_data <- combined_data %>% filter(!is.na(Year) & !is.na(Month) & combined_data$State == 'CA')
-
-# Sort by year and month
-sorted_data <- combined_data %>%
-  arrange(Year, Month)
-```
-
-## DATA EXPLORATION
-
-```{r}
+file_path <- 'data/sorted_electricity_consumption_data.xlsx'
+sorted_data <- read_excel(file_path)
 residential <- ts(as.numeric(sorted_data$RESIDENTIAL.Sales.Megawatthours), start = c(1990, 1), frequency = 12)
-plot(residential)
 ```
 
-### Evaluate Dataset
-
-Observations from the residential ts() object before any transformations:
-
--   *trend*: positive, the residential consumption of electricity is increasing with time.
-
--   *seasonality*: strong seasonality at the annual level. It looks like there are two peaks of electricity use each year (which makes sense if we think about A/C and heat uses as both tied to electricity).
-
--   *type of seasonality*: the variance of the seasonality fluctuations change (increase) as a function of time, so this looks to be a multiplicative seasonality component.
-
--   *stationarity*: given the above observations that we can observe both trends and seasonal effects, we can guess that the time series data is not yet stationary. We can test this below.
-
-
-General takeaways:
-
--   trends/seasonality does not look the same across consumption type (residential, commercial, transportation, etc).
--   transportation has a bunch of missingness (especially in the earlier years)
-    -   it also took a much more noticeable COVID hit than the other sectors (and surprisingly consumption didn't go up that much in 2020 for residential which is kind of surprising given that people were theoretically at home more)
--   commercial sees a much steeper upward trend in the early 2000's
 
 ## SUPPLEMENTARY DATA
 
@@ -264,116 +205,42 @@ plot(forecast(tslm_model_1990, h=12))
 tslm_model_1990
 ```
 
-### Arima
-
-*Evaluate Distribution*
-
-```{r}
-shapiro.test(train_res_1990)
-```
-
--   p-value below significance threshold
--   data not normally distributed and will benefit from Box-Cox Transformation
-
-```{r}
-lambda <- BoxCox.lambda(train_res_1990)
-train_res_1990_transformed <- BoxCox(train_res_1990, lambda)
-plot(train_res_1990_transformed)
-print(lambda)
-```
-
--   The Box-Cox $\lambda = -0.9999$ which is extremely close to -1 indicating that an inverse transformation plus 1 should be applied to smooth the variance.
-
-*Evaluate Stationarity*
-
-```{r}
-kpss_result <- kpss.test(train_res_1990_transformed)
-print(kpss_result)
-```
-
--   p-value below 5%
--   Reject the null hypothesis that series is stationary
--   Non stationary series
-
-*Make Stationary with differencing*
-
-```{r}
-train_res_1990_transformed_first_diff <- diff(train_res_1990_transformed, differences = 1)
-plot(train_res_1990_transformed_first_diff, main="1st Order Differenced Data")
-kpss_result <- kpss.test(train_res_1990_transformed_first_diff)
-print(kpss_result)
-```
-
--   After 1st order differencing, p-value is 0.1
--   After 1 round of differencing, data is stationary in the mean
-
-*Seasonal Differencing*
-
-```{r}
-train_res_1990_transformed_first_diff_sdiff <- diff(train_res_1990_transformed_first_diff, lag = 12, differences = 1)
-plot(train_res_1990_transformed_first_diff_sdiff)
-```
-
-*ACF & PACF*
-
-```{r}
-Acf(train_res_1990_transformed_first_diff_sdiff)
-Pacf(train_res_1990_transformed_first_diff_sdiff)
-```
-
--   Seasonality
-
-*Arima Model*
-
-```{r}
-plot(train_res_1990_transformed_first_diff_sdiff)
-```
-
-*Auto Arima*
+### Auto Arima
 
 ```{r}
 residential_auto_arima_1990 <- auto.arima(train_res_1990, 
                                      seasonal = TRUE, 
-                                     trace = FALSE, 
-                                     stepwise = FALSE, 
-                                     #approximation = FALSE, 
                                      allowdrift = TRUE, 
                                      lambda = 'auto')
+
 summary(residential_auto_arima_1990)
-```
-
-```{r}
 checkresiduals(residential_auto_arima_1990)
+accuracy(residential_auto_arima_1990)
+plot(forecast(residential_auto_arima_1990, h=12))
 ```
-
 
 -   Residuals are not white noise
 
 ```{r}
 residential_auto_arima_2005 <- auto.arima(train_res_2005, 
                                      seasonal = TRUE, 
-                                     trace = FALSE, 
-                                     stepwise = FALSE, 
-                                     #approximation = FALSE, 
                                      allowdrift = TRUE, 
                                      lambda = 'auto')
 summary(residential_auto_arima_2005)
-```
-
-```{r}
 checkresiduals(residential_auto_arima_2005)
+accuracy(residential_auto_arima_2005)
+plot(forecast(residential_auto_arima_2005, h=12))
 ```
-
 
 ```{r}
 residential_auto_arima_2013 <- auto.arima(train_res_2013, 
                                      seasonal = TRUE, 
-                                     trace = FALSE, 
-                                     stepwise = FALSE, 
-                                     #approximation = FALSE, 
                                      allowdrift = TRUE, 
                                      lambda = 'auto')
 summary(residential_auto_arima_2013)
+checkresiduals(residential_auto_arima_2013)
+accuracy(residential_auto_arima_2013)
+plot(forecast(residential_auto_arima_2013, h=12))
 ```
 
 ```{r}
@@ -494,57 +361,84 @@ summary(tslm_residential_tot_temp)
 ## MODEL 3: VECTOR AUTOREGRESSIONS (VAR and VARIMA)
 
 
-
-
-
-
-
-
-
-
 ## MODEL TESTING
 
 *Models to Test*
 
 ```{r}
-models_to_test <- list(
-  list("Residential Auto Arima - 1990", residential_auto_arima_1990, test_res_1990, 12),
-  list("Residential Auto Arima - 2005", residential_auto_arima_2005, test_res_2005, 12),
-  list("Residential Auto Arima - 2013", residential_auto_arima_2013, test_res_2013, 12),
-  list("Residential Seasonal Naive - 1990", snaive_model_1990, test_res_1990, 12),
-  list("Residential Seasonal Naive - 2005", snaive_model_2005, test_res_2005, 12),
-  list("Residential Seasonal Naive - 2013", snaive_model_2013, test_res_2013, 12),
-  list("ETS - 1990", ets_model_1990, test_res_1990, 12),
-  list("ETS - 2005", ets_model_2005, test_res_2005, 12),
-  list("ETS - 2013", ets_model_2013, test_res_2013, 12),
-  list("Linear Regression - 1990", tslm_model_1990, test_res_1990, 12),
-  list("Linear Regression - 2005", tslm_model_2005, test_res_2005, 12),
-  list("Linear Regression - 2013", tslm_model_2013, test_res_2013, 12)
+models <- list(
+  list("Residential Auto Arima - 1990", residential_auto_arima_1990, train_res_1990, test_res_1990, 12),
+  list("Residential Auto Arima - 2005", residential_auto_arima_2005, train_res_2005, test_res_2005, 12),
+  list("Residential Auto Arima - 2013", residential_auto_arima_2013, train_res_2013, test_res_2013, 12),
+  list("Residential Seasonal Naive - 1990", snaive_model_1990, train_res_1990, test_res_1990, 12),
+  list("Residential Seasonal Naive - 2005", snaive_model_2005, train_res_2005, test_res_2005, 12),
+  list("Residential Seasonal Naive - 2013", snaive_model_2013, train_res_2013, test_res_2013, 12),
+  list("ETS - 1990", ets_model_1990, train_res_1990, test_res_1990, 12),
+  list("ETS - 2005", ets_model_2005, train_res_2005, test_res_2005, 12),
+  list("ETS - 2013", ets_model_2013, train_res_2013, test_res_2013, 12),
+  list("Linear Regression - 1990", tslm_model_1990, train_res_1990, test_res_1990, 12),
+  list("Linear Regression - 2005", tslm_model_2005, train_res_2005, test_res_2005, 12),
+  list("Linear Regression - 2013", tslm_model_2013, train_res_2013, test_res_2013, 12),
+  list("Linear Regression - 2013", tslm_model_2013, train_res_2013, test_res_2013, 12)
 )
+```
 
-evaluate_models <- function(models_to_test) {
+*Training Metrics*
+
+```{r}
+evaluate_models_train <- function(models) {
   results <- list()
   
-  for (model_info in models_to_test) {
+  for (model_info in models) {
     
     model_name <- model_info[[1]]
     model <- model_info[[2]]
-    test_data <- model_info[[3]]
-    horizon <- model_info[[4]]
+    train_data <- model_info[[4]]
+    test_data <- model_info[[4]]
+    horizon <- model_info[[5]]
     
-    # Forecasting
+    errors <- accuracy(model)
+    MAPE <- errors["Training set", "MAPE"]
+    RMSE <- errors["Training set", "RMSE"]
+    AICc <- ifelse(exists("aicc", where = model), model$aicc, NA)
+    
+    results[[model_name]] <- list(MAPE = MAPE, RMSE = RMSE, AICc = AICc)
+
+    cat(paste0(model_name, " Model Performance on Training Data: \n",
+               "MAPE: ", MAPE, "\n",
+               "RMSE: ", RMSE, "\n",
+               "AICc: ", AICc, "\n\n"))
+  }
+
+  return(results)
+}
+
+results_training <- evaluate_models_train(models)
+```
+
+*Testing Metrics*
+```{r}
+evaluate_models_test <- function(models) {
+  results <- list()
+  
+  for (model_info in models) {
+    
+    model_name <- model_info[[1]]
+    model <- model_info[[2]]
+    train_data <- model_info[[4]]
+    test_data <- model_info[[4]]
+    horizon <- model_info[[5]]
     model_forecast <- forecast(model, h=horizon)
     
-    # Error calculation
     errors <- accuracy(model_forecast, test_data)
-    MAE <- errors["Test set", "MAE"]
+    MAPE <- errors["Test set", "MAPE"]
     RMSE <- errors["Test set", "RMSE"]
     AICc <- ifelse(exists("aicc", where = model), model$aicc, NA)
     
-    results[[model_name]] <- list(MAE = MAE, RMSE = RMSE, AICc = AICc, Forecast = model_forecast)
+    results[[model_name]] <- list(MAPE = MAPE, RMSE = RMSE, AICc = AICc, Forecast = model_forecast)
     
     cat(paste0(model_name, " Model Performance on Test Data: \n",
-               "MAE: ", MAE, "\n",
+               "MAPE: ", MAPE, "\n",
                "RMSE: ", RMSE, "\n",
                "AICc: ", AICc, "\n\n"))
   }
@@ -552,32 +446,6 @@ evaluate_models <- function(models_to_test) {
   return(results)
 }
 
-results <- evaluate_models(models_to_test)
-```
-
-### Model application to other types of electricity consumption
-
-**COMMERCIAL ENERGY CONSUMPTION**
-
-```{r}
-commercial <- ts(sorted_data$COMMERCIAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
-plot(commercial)
-```
-
-**TRANSPORTATION ENERGY CONSUMPTION**
-
-```{r}
-transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours[!is.na(as.numeric(sorted_data$TRANSPORTATION.Sales.Megawatthours))], start = c(1990, 1), frequency = 12)
-plot(transportation) # not sure if this is totally valid removing the NA's
-
-transportation <- ts(sorted_data$TRANSPORTATION.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
-plot(transportation)
-```
-
-**TOTAL ENERGY CONSUMPTION**
-
-```{r}
-total <- ts(sorted_data$TOTAL.Sales.Megawatthours, start = c(1990, 1), frequency = 12)
-plot(total)
+results <- evaluate_models_test(models)
 ```
 

@@ -1,0 +1,17 @@
+---
+title: "Watts Up CA: Supplementary Data"
+author: "Claire Boyd, Kathryn Link-Oberstar, Megan Moore, Eshan Prasher"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+
+```{r}
+suppressMessages({
+  library(readxl)
+  library(dplyr)
+  library(tidyverse)
+  library(openxlsx)
+})
+
+```the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

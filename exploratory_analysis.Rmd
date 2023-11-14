@@ -1,0 +1,48 @@
+---
+title: "Watts Up CA: Exploratory Analysis"
+author: "Claire Boyd, Kathryn Link-Oberstar, Megan Moore, Eshan Prasher"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r}
+suppressMessages({
+  library(readxl)
+  library(dplyr)
+  library(forecast)
+  library(tidyverse)
+  library(tsibble)
+  library(fpp)
+  library(tseries)
+  library(tidyr)
+})
+
+file_path <- 'data/sorted_electricity_consumption_data.xlsx'
+sorted_data <- read_excel(file_path)
+
+```
+
+```{r}
+residential <- ts(as.numeric(sorted_data$RESIDENTIAL.Sales.Megawatthours), start = c(1990, 1), frequency = 12)
+plot(residential)
+```
+
+### Evaluate Dataset
+
+Observations from the residential ts() object before any transformations:
+
+-   *trend*: positive, the residential consumption of electricity is increasing with time.
+
+-   *seasonality*: strong seasonality at the annual level. It looks like there are two peaks of electricity use each year (which makes sense if we think about A/C and heat uses as both tied to electricity).
+
+-   *type of seasonality*: the variance of the seasonality fluctuations change (increase) as a function of time, so this looks to be a multiplicative seasonality component.
+
+-   *stationarity*: given the above observations that we can observe both trends and seasonal effects, we can guess that the time series data is not yet stationary. We can test this below.
+
+
+General takeaways:
+
+-   trends/seasonality does not look the same across consumption type (residential, commercial, transportation, etc).
+-   transportation has a bunch of missingness (especially in the earlier years)
+    -   it also took a much more noticeable COVID hit than the other sectors (and surprisingly consumption didn't go up that much in 2020 for residential which is kind of surprising given that people were theoretically at home more)
+-   commercial sees a much steeper upward trend in the early 2000's
