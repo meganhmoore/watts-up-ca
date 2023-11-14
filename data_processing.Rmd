@@ -1,0 +1,56 @@
+---
+title: "Watts Up CA: Data Processing"
+author: "Claire Boyd, Kathryn Link-Oberstar, Megan Moore, Eshan Prasher"
+date: "`r Sys.Date()`"
+output: pdf_document
+description: This file reads in monthly energy consumption and cost data for every US state since 1990 and extracts monthly residential consumption for the the state of California, and returns an excel file with year-month consumtpion data for the state of California from 1990 to 2023.
+---
+
+
+```{r}
+suppressMessages({
+  library(readxl)
+  library(dplyr)
+  library(tidyverse)
+  library(openxlsx)
+})
+
+```
+
+
+```{r}
+# Load the Energy Consumption Data
+pathname <- "./data/electricity_consumption_data/"
+files <- list.files(path=pathname, pattern = "\\.(xls|xlsx)$")
+print(files)
+combined_data <- data.frame()
+
+# Convert Files to df, collapse the 3 header columns into 1 header
+for (file in files) {
+  full_path <- file.path(pathname, file)
+  data <- read_excel(full_path, col_names = FALSE)
+  new_headers <- apply(data[1:3, ], 2, function(x) paste(na.omit(x), collapse = " "))
+  names(data) <- new_headers
+  data <- data[-(1:3), ]
+  data <- data.frame(lapply(data, function(x) {
+    if(is.factor(x)) as.character(x) else x
+  }), stringsAsFactors = FALSE)
+  combined_data <- bind_rows(combined_data, data)
+}
+
+# Make Month and Year Numeric
+combined_data$Month <- as.numeric(combined_data$Month)
+combined_data$Year <- as.numeric(combined_data$Year)
+
+# Filter data to exclude NA and only include CA
+combined_data <- combined_data %>% filter(!is.na(Year) & !is.na(Month) & combined_data$State == 'CA')
+
+# Sort by year and month
+sorted_data <- combined_data %>%
+  arrange(Year, Month)
+
+# Write to Excel
+output_path <- "./data/sorted_electricity_consumption_data.xlsx"
+
+cat('\n', 'Data processed and written to', output_path)
+```
