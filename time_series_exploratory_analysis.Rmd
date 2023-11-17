@@ -5,7 +5,6 @@ date: "`r Sys.Date()`"
 output: pdf_document
 ---
 
-
 ```{r}
 suppressMessages({
   library(readxl)
@@ -22,7 +21,6 @@ file_path <- 'data/sorted_electricity_consumption_data.xlsx'
 sorted_data <- read_excel(file_path)
 residential <- ts(as.numeric(sorted_data$RESIDENTIAL.Sales.Megawatthours), start = c(1990, 1), frequency = 12)
 ```
-
 
 ## SUPPLEMENTARY DATA
 
@@ -47,7 +45,7 @@ Read in minimum temperatures.
 ```{r}
 min_temp <- read_csv(url("https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/statewide/time-series/4/tmin/all/1/1990-2023.csv?base_prd=true&begbaseyear=1901&endbaseyear=2000"), skip = 4)
 
-min_temp_ts <- ts(min_temp$`Value`, frequency = 12, start =c(1990,1))
+min_temp_ts <- ts(min_temp$`Value`, frequency = 12, start =c(1990,1), end=c(2023, 7))
 
 plot(min_temp_ts)
 ```
@@ -57,11 +55,10 @@ Read in maximum temperatures.
 ```{r}
 max_temp <- read_csv(url("https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/statewide/time-series/4/tmax/all/1/1990-2023.csv?base_prd=true&begbaseyear=1901&endbaseyear=2000"), skip = 4)
 
-max_temp_ts <- ts(max_temp$`Value`, frequency = 12, start =c(1990,1))
+max_temp_ts <- ts(max_temp$`Value`, frequency = 12, start =c(1990,1), end=c(2023, 7)) # ending in July 2023 when consumption data ends
 
 plot(max_temp_ts)
 ```
-
 
 ### Yearly Population Data
 
@@ -109,6 +106,58 @@ test_res_2013 <- window(residential, start=c(2022, 7), end=c(2023, 7))
 train_test_res_2013 <- window(residential, start=2013, end=c(2023, 7))
 ```
 
+### Train-Test Splits for Independent Variables
+
+```{r}
+split_time_series <- function(time_series, year) {
+  start_train <- c(year, 1)
+  end_train <- c(2022, 6)
+  start_test <- c(2022, 7)
+  end_test <- c(2023, 7)
+  start_train_test <- c(year, 1)
+  end_train_test <- c(2023, 7)
+  
+  train_set <- window(time_series, start = start_train, end = end_train)
+  test_set <- window(time_series, start = start_test, end = end_test)
+  train_test_set <- window(time_series, start = start_train_test, end = end_train_test)
+  
+  return(list(train = train_set, test = test_set, train_test = train_test_set))
+}
+```
+
+```{r}
+# train test split for temp data
+min_1990 <- split_time_series(min_temp_ts, 1990) 
+train_min_temp_1990 <- min_1990$train
+test_min_temp_1990 <- min_1990$test
+train_test_min_temp_1990 <- min_1990$train_test
+
+min_2005 <- split_time_series(min_temp_ts, 2005) 
+train_min_temp_2005 <- min_2005$train
+test_min_temp_2005 <- min_2005$test
+train_test_min_temp_2005 <- min_2005$train_test
+
+min_2013 <- split_time_series(min_temp_ts, 2013) 
+train_min_temp_2013 <- min_2013$train
+test_min_temp_2013 <- min_2013$test
+train_test_min_temp_2013 <- min_2013$train_test
+
+max_1990 <- split_time_series(max_temp_ts, 1990) 
+train_max_temp_1990 <- max_1990$train
+test_max_temp_1990 <- max_1990$test
+train_test_max_temp_1990 <- max_1990$train_test
+
+max_2005 <- split_time_series(max_temp_ts, 2005) 
+train_max_temp_2005 <- max_2005$train
+test_max_temp_2005 <- max_2005$test
+train_test_max_temp_2005 <- max_2005$train_test
+
+max_2013 <- split_time_series(max_temp_ts, 2013) 
+train_max_temp_2013 <- max_2013$train
+test_max_temp_2013 <- max_2013$test
+train_test_max_temp_2013 <- max_2013$train_test
+```
+
 ## BASELINE MODELS
 
 ### Seasonal Naive baseline model
@@ -140,7 +189,6 @@ plot(snaive_model_2013)
 Acf(snaive_model_1990$residuals, lag=100)
 Pacf(snaive_model_1990$residuals, lag=100)
 ```
-
 
 ### Exponential Smoothing
 
@@ -190,12 +238,11 @@ tslm_model_2013 = tslm(train_res_2013 ~ trend + season)
 summary(tslm_model_2013)
 accuracy(tslm_model_2013)
 ```
+
 ```{r}
 Acf(tslm_model_1990$residuals)
 pacf(tslm_model_1990$residuals)
 ```
-
-
 
 ```{r}
 plot(forecast(tslm_model_1990, h=12))
@@ -246,9 +293,6 @@ plot(forecast(residential_auto_arima_2013, h=12))
 ```{r}
 checkresiduals(residential_auto_arima_2013)
 ```
-
-
-
 
 ## MODEL 1: REGRESSION
 
@@ -357,9 +401,51 @@ summary(tslm_residential_tot_temp)
 
 ## MODEL 2: REGRESSION WITH ARMA ERRORS
 
+```{r}
+residential_reg_w_arima_err_1990 <- auto.arima(train_res_1990, 
+                                               xreg = cbind(train_min_temp_1990, train_max_temp_1990),
+                                               seasonal = TRUE) # using lambda and drift made it look pretty whack
+
+residential_reg_w_arima_err_2005 <- auto.arima(train_res_2005, 
+                                               xreg = cbind(train_min_temp_2005, train_max_temp_2005),
+                                               seasonal = TRUE) # using lambda and drift made it look pretty whack
+
+residential_reg_w_arima_err_2013 <- auto.arima(train_res_2013, 
+                                               xreg = cbind(train_min_temp_2013, train_max_temp_2013),
+                                               seasonal = TRUE) # using lambda and drift made it look pretty whack
+```
+
+```{r}
+summary(residential_reg_w_arima_err_1990)
+summary(residential_reg_w_arima_err_2005)
+summary(residential_reg_w_arima_err_2013)
+checkresiduals(residential_reg_w_arima_err_1990)
+checkresiduals(residential_reg_w_arima_err_2005)
+checkresiduals(residential_reg_w_arima_err_2013)
+```
+
+```{r}
+residential_reg_w_arima_err_1990_for <- forecast(residential_reg_w_arima_err_1990, h=12, xreg=cbind(test_min_temp_1990, test_max_temp_1990))
+
+autoplot(residential_reg_w_arima_err_1990_for) +
+  autolayer(test_res_1990)
+
+residential_reg_w_arima_err_2005_for <- forecast(residential_reg_w_arima_err_2005, h=12, xreg=cbind(test_min_temp_2005, test_max_temp_2005))
+
+autoplot(residential_reg_w_arima_err_2005_for) +
+  autolayer(test_res_2005)
+
+residential_reg_w_arima_err_2013_for <- forecast(residential_reg_w_arima_err_2013, h=12, xreg=cbind(test_min_temp_2013, test_max_temp_2013))
+
+autoplot(residential_reg_w_arima_err_2013_for) +
+  autolayer(test_res_2013)
+
+plot(residential_reg_w_arima_err_1990_for)
+plot(residential_reg_w_arima_err_2005_for)
+plot(residential_reg_w_arima_err_2013_for)
+```
 
 ## MODEL 3: VECTOR AUTOREGRESSIONS (VAR and VARIMA)
-
 
 ## MODEL TESTING
 
@@ -379,7 +465,9 @@ models <- list(
   list("Linear Regression - 1990", tslm_model_1990, train_res_1990, test_res_1990, 12),
   list("Linear Regression - 2005", tslm_model_2005, train_res_2005, test_res_2005, 12),
   list("Linear Regression - 2013", tslm_model_2013, train_res_2013, test_res_2013, 12),
-  list("Linear Regression - 2013", tslm_model_2013, train_res_2013, test_res_2013, 12)
+  list("Regression with ARIMA Errors - 1990", residential_reg_w_arima_err_1990, train_res_1990, test_res_1990, 12, cbind(test_min_temp_1990, test_max_temp_1990)), 
+  list("Regression with ARIMA Errors - 2005", residential_reg_w_arima_err_2005, train_res_2005, test_res_2005, 12, cbind(test_min_temp_2005, test_max_temp_2005)),
+  list("Regression with ARIMA Errors - 2013", residential_reg_w_arima_err_2013, train_res_2013, test_res_2013, 12, cbind(test_min_temp_2013, test_max_temp_2013))
 )
 ```
 
@@ -417,6 +505,7 @@ results_training <- evaluate_models_train(models)
 ```
 
 *Testing Metrics*
+
 ```{r}
 evaluate_models_test <- function(models) {
   results <- list()
@@ -428,7 +517,12 @@ evaluate_models_test <- function(models) {
     train_data <- model_info[[4]]
     test_data <- model_info[[4]]
     horizon <- model_info[[5]]
-    model_forecast <- forecast(model, h=horizon)
+    if (length(model_info) >= 6){
+      xreg_val <- model_info[[6]]
+      model_forecast <- forecast(model, xreg=xreg_val, h=horizon)
+    } else {
+      model_forecast <- forecast(model, h=horizon)
+    }
     
     errors <- accuracy(model_forecast, test_data)
     MAPE <- errors["Test set", "MAPE"]
@@ -448,4 +542,3 @@ evaluate_models_test <- function(models) {
 
 results <- evaluate_models_test(models)
 ```
-
