@@ -217,6 +217,26 @@ plot(forecast(ets_model_1990, h=12))
 
 ### Linear Regression
 
+Given our exploratory analysis (see other script) we first want to apply the boxcox transformation and one order of differencing before we get our baseline tslm models.
+
+```{r}
+lambda_1990 = BoxCox.lambda(train_res_1990)
+lambda_2005 = BoxCox.lambda(train_res_2005)
+lambda_2013 = BoxCox.lambda(train_res_2013)
+
+train_res_1990_boxcox = BoxCox(train_res_1990, lambda_1990)
+train_res_2005_boxcox = BoxCox(train_res_2005, lambda_2005)
+train_res_2013_boxcox = BoxCox(train_res_2013, lambda_2013)
+
+train_res_1990_boxcox_diff = diff(train_res_1990_boxcox)
+train_res_2005_boxcox_diff = diff(train_res_2005_boxcox)
+train_res_2013_boxcox_diff = diff(train_res_2013_boxcox)
+```
+
+```{r}
+plot(train_res_1990_boxcox_diff)
+```
+
 MAPE for 1990: 6.877424 RMSE for 1990: 610919.6
 
 MAPE for 2005: 5.426142 RMSE for 2005: 533482.7
@@ -226,15 +246,15 @@ MAPE for 2013: 5.572336 RMSE for 2013: 570245.5
 Unlike the other baselines, this slightly improves with time and then gets worse again.
 
 ```{r}
-tslm_model_1990 = tslm(train_res_1990 ~ trend + season)
+tslm_model_1990 = tslm(train_res_1990_boxcox_diff ~ trend + season)
 summary(tslm_model_1990)
 accuracy(tslm_model_1990)
 
-tslm_model_2005 = tslm(train_res_2005 ~ trend + season)
+tslm_model_2005 = tslm(train_res_2005_boxcox_diff ~ trend + season)
 summary(tslm_model_2005)
 accuracy(tslm_model_2005)
 
-tslm_model_2013 = tslm(train_res_2013 ~ trend + season)
+tslm_model_2013 = tslm(train_res_2013_boxcox_diff ~ trend + season)
 summary(tslm_model_2013)
 accuracy(tslm_model_2013)
 ```
