@@ -1,6 +1,6 @@
 ---
 title: "Watts Up CA: Models"
-author: "Claire Boyd, Kathryn Link-Oberstar, Megan Moore, Eshan Prasher"
+author: "Claire Boyd, Kathryn Link-Oberstar, Megan Moore, Eshan Prashar"
 date: "`r Sys.Date()`"
 output: pdf_document
 ---
@@ -15,12 +15,21 @@ suppressMessages({
   library(fpp)
   library(tseries)
   library(tidyr)
+  options(scipen = 999) #this is to switch off the scientific notation
 })
 
 file_path <- 'data/sorted_electricity_consumption_data.xlsx'
 sorted_data <- read_excel(file_path)
 residential <- ts(as.numeric(sorted_data$RESIDENTIAL.Sales.Megawatthours), start = c(1990, 1), frequency = 12)
 ```
+
+### Plotting residential consumption curve
+
+```{r}
+plot(residential)
+```
+
+
 
 ## SUPPLEMENTARY DATA
 
@@ -86,6 +95,52 @@ plot(unemp_rate_ts, ylab="Unemployment rate", main="Monthly unemployment rate in
 ```{r}
 plot(decompose(unemp_rate_ts))
 ```
+### Precipitation Data
+
+```{r}
+cali_precip <- read_csv('./data/weather_exp/data_preci.csv')
+precip_ts <- ts(cali_precip$`Value`, frequency = 12, start =c(1990,1), end=c(2023, 7)) # ending in July 2023 when consumption data ends
+
+plot(precip_ts)
+```
+
+### Hot Days
+```{r}
+hot_days <- read_csv('./data/weather_exp/data_heat_days.csv')
+hot_days_ts <- ts(hot_days$`Value`, frequency = 12, start =c(1990,1), end=c(2023, 7)) # ending in July 2023 when consumption data ends
+
+plot(hot_days_ts)
+```
+### Cold Days
+
+```{r}
+cold_days <- read_csv('./data/weather_exp/data_cool_days.csv')
+cold_days_ts <- ts(cold_days$`Value`, frequency = 12, start =c(1990,1), end=c(2023, 7)) # ending in July 2023 when consumption data ends
+
+plot(cold_days_ts)
+```
+### Natural gas consumption Data
+```{r}
+n_gas <- read_csv('./data/natural_gas/California_Natural_Gas_Residential_Consumption.csv')
+n_gas_ts <- ts(n_gas$`Value`, frequency = 12, start =c(1990,1), end=c(2023, 7)) # ending in July 2023 when consumption data ends
+
+plot(n_gas_ts)
+```
+### Pricing
+
+```{r}
+elec_prices_ts <- ts(as.numeric(sorted_data$RESIDENTIAL.Price.Cents.kWh), start = c(1990, 1), frequency = 12)
+plot(elec_prices_ts)
+```
+
+### Residential Customers Data
+```{r}
+customers <- read_excel('./data/customers_imputed.xlsx', sheet = "Sheet2")
+customers_ts <- ts(customers$`customers`, frequency = 12, start =c(1990,1), end=c(2023, 7)) # ending in July 2023 when consumption data ends
+
+plot(customers_ts)
+```
+
 
 ## TRAIN TEST SPLITS
 
@@ -127,7 +182,7 @@ split_time_series <- function(time_series, year) {
 
 ```{r}
 # train test split for temp data
-min_1990 <- split_time_series(min_temp_ts, 1990) 
+min_1990 <- split_time_series(min_temp_ts, 1990)
 train_min_temp_1990 <- min_1990$train
 test_min_temp_1990 <- min_1990$test
 train_test_min_temp_1990 <- min_1990$train_test
@@ -156,7 +211,60 @@ max_2013 <- split_time_series(max_temp_ts, 2013)
 train_max_temp_2013 <- max_2013$train
 test_max_temp_2013 <- max_2013$test
 train_test_max_temp_2013 <- max_2013$train_test
+
+## New additions
+
+#temperature
+avgtemp_1990 <- split_time_series(temp_ts, 1990) 
+train_avgtemp_1990 <- avgtemp_1990$train
+test_avgtemp_1990 <- avgtemp_1990$test
+train_test_avgtemp_1990 <- avgtemp_1990$train_test
+
+
+#unemployment rate
+unemp_1990 <- split_time_series(unemp_rate_ts, 1990) 
+train_unemp_1990 <- unemp_1990$train
+test_unemp_1990 <- unemp_1990$test
+train_test_unemp_1990 <- unemp_1990$train_test
+
+# precipitation
+precip_1990 <- split_time_series(precip_ts, 1990) 
+train_precip_1990 <- precip_1990$train
+test_precip_1990 <- precip_1990$test
+train_test_precip_1990 <- precip_1990$train_test
+
+# hot days
+hdays_1990 <- split_time_series(hot_days_ts, 1990) 
+train_hdays_1990 <- hdays_1990$train
+test_hdays_1990 <- hdays_1990$test
+train_test_hdays_1990 <- hdays_1990$train_test
+
+# cold days
+cdays_1990 <- split_time_series(cold_days_ts, 1990) 
+train_cdays_1990 <- cdays_1990$train
+test_cdays_1990 <- cdays_1990$test
+train_test_cdays_1990 <- cdays_1990$train_test
+
+# natural gas
+ngas_1990 <- split_time_series(n_gas_ts, 1990) 
+train_ngas_1990 <- ngas_1990$train
+test_ngas_1990 <- ngas_1990$test
+train_test_ngas_1990 <- ngas_1990$train_test
+
+#pricing
+elec_prices_1990 <- split_time_series(elec_prices_ts, 1990) 
+train_elec_prices_1990 <- elec_prices_1990$train
+test_elec_prices_1990 <- elec_prices_1990$test
+train_test_elec_prices_1990 <- elec_prices_1990$train_test
+
+# customers
+customers_1990 <- split_time_series(customers_ts, 1990) 
+train_customers_1990 <- customers_1990$train
+test_customers_1990 <- customers_1990$test
+train_test_customers_1990 <- customers_1990$train_test
+
 ```
+
 
 ## BASELINE MODELS
 
@@ -294,112 +402,113 @@ plot(forecast(residential_auto_arima_2013, h=12))
 checkresiduals(residential_auto_arima_2013)
 ```
 
-## MODEL 1: REGRESSION
 
-### Linear Regression with temperature and unemployment
 
-First, creating a dataframe with all variables from 1990-2022
+### Linear Regression with independent variables
 
 ```{r}
-# Create a sequence of years and months from 1990 to 2022
-dates <- seq(as.Date("1990-01-01"), as.Date("2022-12-01"), by="months")
+residential_multiv_reg_1990 <- tslm(train_res_1990 ~ train_max_temp_1990 + 
+                  train_cdays_1990 + train_hdays_1990 + 
+                  train_precip_1990 + train_ngas_1990 + train_elec_prices_1990 + 
+                  train_customers_1990, lambda = 'auto')
 
-# Create a dataframe with Year and Month columns
-residential_reg_df <- data.frame(Year = as.integer(format(dates, "%Y")), 
-                                 Month = as.integer(format(dates, "%m")))
+# Store the residuals
+residuals_residential_multiv_reg_1990 <- residuals(residential_multiv_reg_1990)
 
-# Extract yearly population values from the pop_data dataframe
-residential_reg_df$pop <- as.numeric(rep(pop_data$population, each = 12))
+# Store the fitted values
+fitted_residential_multiv_reg_1990 <- residential_multiv_reg_1990$fitted.values
 
-# Extract consumption data from sorted_data
-residential_reg_df$elec_cons <- as.numeric(subset(sorted_data, Year >= 1990 & 
-                                        Year <= 2022)$RESIDENTIAL.Sales.Megawatthours)
-
-# Extract temperature data from temp_data
-# First, we create a new 'Year' column by extracting the first four characters from 'Date'
-
-temp_data$Year <- as.numeric(substr(temp_data$Date, 1, 4))
-residential_reg_df$temp <- as.numeric(subset(temp_data,Year >= 1990 & 
-                                        Year <= 2022)$Value)
-
-# Extract unemployment rate data from unemp_data
-residential_reg_df$unemp_rate <- as.numeric(subset(unemp_data, Year >= 1990 & 
-                                              Year <= 2022)$`unemployment rate`)
-
-# Calculate consumption per capita by dividing consumption by population
-# consumption is MWhrs per million population
-residential_reg_df$cons_capita <- residential_reg_df$elec_cons/(residential_reg_df$pop)
-
-# Optionally, you can set row names if needed
-rownames(residential_reg_df) <- NULL
-
-# Print the first few rows to verify
-head(residential_reg_df, 15)
+summary(residential_multiv_reg_1990)
+accuracy(residential_multiv_reg_1990)
 ```
+### Baseline regression model analysis
 
 ```{r}
-# Adding normalized values of 'temperature' and 'unemployment rate' to the dataframe 
-residential_reg_df$norm_temp <- scale(residential_reg_df$temp)
-residential_reg_df$norm_unemp_rate <- scale(residential_reg_df$unemp_rate)
+## Regression analysis: potential to create a function that does all of this for any given regression
 
-# First, we will regress only with temperature
-y_var <- ts(residential_reg_df$cons_capita, start = c(1990,1), frequency = 12)
-x1_var <- ts(residential_reg_df$temp, start = c(1990,1), frequency = 12)
-  
-tslm_residential_temp <- tslm(y_var ~ x1_var, lambda = 'auto')  
+# First, let's plot residuals vs. fitted values
+plot(fitted_residential_multiv_reg_1990, residuals_residential_multiv_reg_1990, 
+     xlab = "Fitted values", ylab = "Residuals", 
+     main = "Residuals vs Fitted Values Plot")
+abline(h = 0, col = "red")  # Add a horizontal line at y = 0 (for reference)
 
-# Summarize the regression results
-summary(tslm_residential_temp)
-accuracy(tslm_residential_temp)
+# What conclusion can be drawn from this? -> Residual values are pretty low, which is good I guess?
 
+# Now, we can create a Q-Q plot for residuals 
+qqnorm(residuals_residential_multiv_reg_1990)
+qqline(residuals_residential_multiv_reg_1990)
 
-# Now we add unemployment to this
-x2_var <- ts(residential_reg_df$unemp_rate, start = c(1990,1), frequency = 12)
-tslm_residential_temp_unemp <- tslm(y_var ~ x1_var + x2_var, lambda = 'auto') 
+# Shapiro-Wilk normality test
+shapiro.test(residuals_residential_multiv_reg_1990)
 
-# Summarize the regression results
-summary(tslm_residential_temp_unemp)
-accuracy(tslm_residential_temp_unemp)
-
-# Then just regress with population 
-x3_var <- ts(residential_reg_df$unemp_rate, start = c(1990,1), frequency = 12)
-tslm_residential_pop <- tslm(y_var ~ x3_var, lambda = 'auto')  
-
-# Summarize the regression results
-summary(tslm_residential_pop)
-accuracy(tslm_residential_pop)
+# We can also check the ACF plot for residuals
+checkresiduals(residential_multiv_reg_1990)
 ```
 
-\*\*\* Key takeaways: - temperature is statistically significant, unemployment rate is not - maybe look at other labour market variables (or normalize and check), population is also not statistically significant indicating that consumption increases are not necessarily attributable to more people using electricity.
+### Overall takeaways from baseline model:
+- Adjusted R\^2? - Almost half the variation can be explained by these variables
+- Plot of residuals vs. fitted values does not convey anything clearly
+- QQ plot indicates significant deviation from normality; confirmed by Shapiro-Wilk test
+- Breusch-Godfrey test and ACF plots also show clear auto-correlations in residuals
 
--   Do we look at adjusted R\^2? why not?
 
--   forecast is not working on this for some reason - need to debug - I think this is due to the fact that we need to know the "future" independent variables
+### Add Claire's tslm with just seasonality and trend here
+MAPE for 1990: 5.77 RMSE for 1990: 520,087
+
+### Adding trend and seasonality along with other variables
+```{r}
+residential_ts_multiv_reg_1990 <- tslm(train_res_1990 ~ trend + season + train_max_temp_1990 + 
+                  train_cdays_1990 + train_hdays_1990 + 
+                  train_precip_1990 + train_ngas_1990 + train_elec_prices_1990 + 
+                  train_customers_1990, lambda = 'auto')
+
+# Store the residuals
+residuals_residential_ts_multiv_reg_1990 <- residuals(residential_ts_multiv_reg_1990)
+
+# Store the fitted values
+fitted_residential_ts_multiv_reg_1990 <- residential_ts_multiv_reg_1990$fitted.values
+
+summary(residential_ts_multiv_reg_1990)
+accuracy(residential_ts_multiv_reg_1990)
+```
+
+### MAPE value of 4.14 and RMSE value of 417,104 are better
+
+### Baseline regression with trend and seasonality model analysis
 
 ```{r}
-# plot(forecast(tslm_residential_pop), h=12)
-# TODO forecast 
-# 1) train model on only training set 
-# 2) set temp/pop/whatever is being regressed on aside for test set
-# 3) figure out how to provide the x_vals for the forcast
+
+# First, let's plot residuals vs. fitted values
+plot(fitted_residential_ts_multiv_reg_1990, residuals_residential_ts_multiv_reg_1990, 
+     xlab = "Fitted values", ylab = "Residuals", 
+     main = "Residuals vs Fitted Values Plot")
+abline(h = 0, col = "red")  # Add a horizontal line at y = 0 (for reference)
+
+# Now, we can create a Q-Q plot for residuals 
+qqnorm(residuals_residential_ts_multiv_reg_1990)
+qqline(residuals_residential_ts_multiv_reg_1990)
+
+# Shapiro-Wilk normality test
+shapiro.test(residuals_residential_ts_multiv_reg_1990)
+
+# We can also check the ACF plot for residuals
+checkresiduals(residential_ts_multiv_reg_1990)
 ```
+## What changed?
+- Residuals seem to be normally distributed
+- However, they still have serial autocorrelation
+- From this analysis, we can however narrow down to the important variables: 
+  - trend, season, max_temp, cold_days, prices and customers
 
-```{r}
-### Experimenting with other regressions
+## Potential next steps for model building: 
+- To forecast independent variables, use seasonal naive
+- Megan already has Regression with ARIMA error, just make all variables stationary before running the models
+- Check if residuals still show auto-correlation
+- Check accuracy measures on train and test
+- Plot forecasts with confidence intervals
+- With this, our regression analysis should be complete
 
-y_var <- ts(residential_reg_df$cons, start = c(1990,1), frequency = 12) # consumption instead of consumption per capita
-
-tslm_residential_tot_temp <- tslm(y_var ~ x1_var, lambda = 'auto') 
-
-accuracy(tslm_residential_tot_temp)
-summary(tslm_residential_tot_temp)
-
-# Takeaway: No impact of standardizing consumption by population in previous regression
-```
-
-\*\*\* Next step: combine Claire's autoregression with temperature (and any other variable) to create models discussed in Lecture-7
-
-## MODEL 2: REGRESSION WITH ARMA ERRORS
+## MODEL 1: REGRESSION WITH ARMA ERRORS 
 
 ```{r}
 residential_reg_w_arima_err_1990 <- auto.arima(train_res_1990, 
@@ -445,7 +554,6 @@ plot(residential_reg_w_arima_err_2005_for)
 plot(residential_reg_w_arima_err_2013_for)
 ```
 
-## MODEL 3: VECTOR AUTOREGRESSIONS (VAR and VARIMA)
 
 ## MODEL TESTING
 
