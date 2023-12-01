@@ -15,6 +15,7 @@ suppressMessages({
   library(fpp)
   library(tseries)
   library(tidyr)
+  library(TSA)
 })
 
 file_path <- 'data/sorted_electricity_consumption_data.xlsx'
@@ -42,6 +43,8 @@ With the temperature data we do not seem to have a notable upward or downward tr
 
 Read in minimum temperatures.
 
+## Minimum Temperatures
+
 ```{r}
 min_temp <- read_csv(url("https://www.ncei.noaa.gov/access/monitoring/climate-at-a-glance/statewide/time-series/4/tmin/all/1/1990-2023.csv?base_prd=true&begbaseyear=1901&endbaseyear=2000"), skip = 4)
 
@@ -49,6 +52,8 @@ min_temp_ts <- ts(min_temp$`Value`, frequency = 12, start =c(1990,1), end=c(2023
 
 plot(min_temp_ts)
 ```
+
+## Maximum Temperatures
 
 Read in maximum temperatures.
 
@@ -447,6 +452,35 @@ plot(residential_reg_w_arima_err_2013_for)
 
 ## MODEL 3: VECTOR AUTOREGRESSIONS (VAR and VARIMA)
 
+## MODEL 4: FOURIER 
+
+Do analysis of multiple seasonalities
+
+```{r}
+temp_1990 <- periodogram(train_test_res_1990)
+temp_2005 <- periodogram(train_test_res_2005)
+temp_2013 <- periodogram(train_test_res_2013)
+temp_1990$freq
+round(temp_1990$spec/1e5, 3)
+temp_2005$freq
+temp_2013$freq
+```
+
+The periodogram shows that there are multiple peaks indicating that there are multiple seasonalities. There seem to be at least 2 seasonal patterns with two large seasonal patterns for all time frames, this seems to relate to the annual (12 month) seasonal pattern and a 6 month seasonal pattern.
+
+```{r}
+residential_fourier_1990 <- auto.arima(train_res_1990, xreg=fourier(train_res_1990, 5), seasonal=FALSE)
+fourier_forecast <- forecast(residential_fourier_1990, xreg=fourier(train_res_1990, 5, 12)) 
+plot(fc)
+summary(fit)
+
+residential_fourier_2005 <- auto.arima(train_res_2005, xreg=fourier(train_res_2005, 5), seasonal=FALSE)
+residential_fourier_2013 <- auto.arima(train_res_2013, xreg=fourier(train_res_2013, 5), seasonal=FALSE)
+
+```
+
+For the 1990 example at least, the fourier transform produces 20 coefficients.
+
 ## MODEL TESTING
 
 *Models to Test*
@@ -467,7 +501,10 @@ models <- list(
   list("Linear Regression - 2013", tslm_model_2013, train_res_2013, test_res_2013, 12),
   list("Regression with ARIMA Errors - 1990", residential_reg_w_arima_err_1990, train_res_1990, test_res_1990, 12, cbind(test_min_temp_1990, test_max_temp_1990)), 
   list("Regression with ARIMA Errors - 2005", residential_reg_w_arima_err_2005, train_res_2005, test_res_2005, 12, cbind(test_min_temp_2005, test_max_temp_2005)),
-  list("Regression with ARIMA Errors - 2013", residential_reg_w_arima_err_2013, train_res_2013, test_res_2013, 12, cbind(test_min_temp_2013, test_max_temp_2013))
+  list("Regression with ARIMA Errors - 2013", residential_reg_w_arima_err_2013, train_res_2013, test_res_2013, 12, cbind(test_min_temp_2013, test_max_temp_2013)),
+  list("Residential Fourier - 1990", residential_fourier_1990, train_res_1990, test_res_1990, 12, fourier(train_res_1990, 5, 12)),
+  list("Residential Fourier - 2005", residential_fourier_2005, train_res_2005, test_res_2005, 12, fourier(train_res_2005, 5, 12)),
+  list("Residential Fourier - 2013", residential_fourier_2013, train_res_2013, test_res_2013, 12, fourier(train_res_2013, 5, 12))
 )
 ```
 
